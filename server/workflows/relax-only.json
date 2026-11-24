@@ -1,0 +1,21 @@
+{
+  "id": "relax-only",
+  "schema": 1,
+  "description": "Geometry optimisation only. Bulk uses ISIF=3; pass strategy 'fixed-cell' for a slab or a molecule, where the vacuum axis must not move.",
+  "match": {"tasks": ["relax", "optimise", "optimize"]},
+  "default_strategy": "bulk",
+  "strategies": {
+    "bulk": {
+      "stages": [
+        {"id": "00-relax", "prototype": "relax"}
+      ]
+    },
+    "fixed-cell": {
+      "stages": [
+        {"id": "00-relax", "prototype": "relax",
+         "overrides": {"ISIF": 2},
+         "note": "ISIF=2 keeps the cell fixed: correct for a slab or a molecule in a box."}
+      ]
+    }
+  }
+}

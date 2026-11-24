@@ -1,0 +1,49 @@
+{
+    "name":  "qvasp-skill",
+    "version":  "1.1.0",
+    "description":  "qvasp toolkit for DeepSeek Harness: 88-command VASP reference skill + MCP server (14 tools) for task analysis, result analysis, and standard workflows",
+    "license":  "MIT",
+    "repository":  {
+                       "type":  "git",
+                       "url":  "git+https://github.com/Chaosheng-yiwc/qvasp-skill.git"
+                   },
+    "keywords":  [
+                     "dsh-plugin",
+                     "qvasp",
+                     "vasp",
+                     "dft",
+                     "materials-science",
+                     "computational-physics",
+                     "mcp",
+                     "skill"
+                 ],
+    "type":  "module",
+    "main":  "index.js",
+    "exports":  {
+                    ".":  "./index.js",
+                    "./package.json":  "./package.json",
+                    "./locale/*.json":  "./locale/*.json",
+                    "./icon":  "./icon.svg"
+                },
+    "files":  [
+                  "index.js",
+                  "cordis.patch.yml",
+                  "locale/*.json",
+                  "docs",
+                  "icon.svg",
+                  "skills",
+                  "server",
+                  "LICENSE",
+                  "README.md",
+                  "assets",
+                  "screenshots.json"
+              ],
+    "engines":  {
+                    "node":  "\u003e=18"
+                },
+    "dsh":  {
+                "bundle":  {
+                               "patch":  "./cordis.patch.yml"
+                           }
+            }
+}

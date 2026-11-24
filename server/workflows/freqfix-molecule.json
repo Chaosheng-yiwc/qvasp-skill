@@ -1,0 +1,19 @@
+{
+  "id": "freqfix-molecule",
+  "schema": 1,
+  "description": "Remove an imaginary mode of a molecule or a Gamma-point cell: finite-displacement frequencies, -freqfix mode 1 (displace along the soft mode by 0.10 A), relax, recompute the frequencies. Two rounds at most: if the mode survives, the guess was wrong, not the amplitude.",
+  "match": {"tasks": ["freqfix", "imaginary-frequency", "soft-mode"]},
+  "stages": [
+    {"id": "00-freq", "prototype": "dfpt",
+     "gate": {"type": "frequencies_present"}},
+    {"id": "01-fix", "kind": "post", "qvasp": "-freqfix", "stdin": ["1", "1", "0.10"],
+     "inputs": {"../00-freq/OUTCAR": "OUTCAR", "../00-freq/POSCAR": "POSCAR"},
+     "gate": {"type": "file_present", "file": "freqfix.dat"}},
+    {"id": "02-relax", "prototype": "relax",
+     "inputs": {"../01-fix/POSCAR": "POSCAR"},
+     "overrides": {"ISIF": 2, "EDIFFG": -0.001, "NSW": 200}},
+    {"id": "03-freq", "prototype": "dfpt",
+     "inputs": {"../02-relax/CONTCAR": "POSCAR"},
+     "gate": {"type": "frequencies_present"}}
+  ]
+}

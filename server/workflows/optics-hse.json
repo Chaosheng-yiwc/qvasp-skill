@@ -1,0 +1,51 @@
+{
+  "id": "optics-hse",
+  "schema": 1,
+  "description": "Optical response with HSE06. 'opt' (VASP >= 6.3) folds the hybrid SCF and the optical run into one job via KPOINTS_OPT; 'twostep' runs the hybrid SCF and then an ICHARG=11 LOPTICS job reusing CHGCAR. NBANDS is the limiting factor, not the k-mesh: a dielectric function needs roughly 1.5x the occupied bands.",
+  "default_strategy": "opt",
+  "match": {"tasks": ["optics", "dielectric", "absorption"], "functional": ["hse", "hse06"]},
+  "strategies": {
+    "opt": {
+      "requires": {"vasp_min": "6.3"},
+      "stages": [
+        {"id": "00-relax", "prototype": "relax"},
+        {"id": "01-scf", "prototype": "scf",
+         "inputs": {"../00-relax/CONTCAR": "POSCAR"},
+         "overrides": {"LHFCALC": true, "HFSCREEN": 0.2, "AEXX": 0.25,
+                       "LCHARG": true, "LWAVE": true}},
+        {"id": "02-optics", "prototype": "transport",
+         "kpoints": "-k 0.03",
+         "kpoints_opt": "-k 0.02",
+         "inputs": {"../01-scf/CONTCAR": "POSCAR", "../01-scf/CHGCAR": "CHGCAR"},
+         "overrides": {"LHFCALC": true, "HFSCREEN": 0.2, "AEXX": 0.25,
+                       "LOPTICS": true, "NEDOS": 2000, "CSHIFT": 0.1,
+                       "ICHARG": 11, "NBANDS": 96},
+         "gate": {"type": "file_present", "file": "vasprun.xml"}},
+        {"id": "03-post", "prototype": "post",
+         "qvasp": "-opticsd",
+         "inputs": {"../02-optics/vasprun.xml": "vasprun.xml"},
+         "gate": {"type": "file_present", "file": "IMAG.dat"}}
+      ]
+    },
+    "twostep": {
+      "stages": [
+        {"id": "00-relax", "prototype": "relax"},
+        {"id": "01-scf", "prototype": "scf",
+         "inputs": {"../00-relax/CONTCAR": "POSCAR"},
+         "overrides": {"LHFCALC": true, "HFSCREEN": 0.2, "AEXX": 0.25,
+                       "LCHARG": true, "LWAVE": true}},
+        {"id": "02-optics", "prototype": "transport",
+         "kpoints": "-k 0.02",
+         "inputs": {"../01-scf/CONTCAR": "POSCAR", "../01-scf/CHGCAR": "CHGCAR"},
+         "overrides": {"LHFCALC": true, "HFSCREEN": 0.2, "AEXX": 0.25,
+                       "LOPTICS": true, "NEDOS": 2000, "CSHIFT": 0.1,
+                       "ICHARG": 11, "NBANDS": 96},
+         "gate": {"type": "file_present", "file": "vasprun.xml"}},
+        {"id": "03-post", "prototype": "post",
+         "qvasp": "-opticsd",
+         "inputs": {"../02-optics/vasprun.xml": "vasprun.xml"},
+         "gate": {"type": "file_present", "file": "IMAG.dat"}}
+      ]
+    }
+  }
+}

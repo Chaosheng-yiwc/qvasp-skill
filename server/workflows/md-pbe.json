@@ -1,0 +1,36 @@
+{
+  "id": "md-pbe",
+  "schema": 1,
+  "description": "Ab-initio molecular dynamics at fixed temperature, then trajectory analysis. The relaxation matters more than for a static run: a structure that is not at a minimum heats up or drifts instead of sampling.",
+  "match": {"tasks": ["md", "molecular-dynamics", "dynamics", "melting"]},
+  "default_strategy": "nvt",
+  "strategies": {
+    "nvt": {
+      "stages": [
+        {"id": "00-relax", "prototype": "relax",
+         "overrides": {"ISIF": 3, "EDIFFG": -0.01, "NSW": 100, "ENCUT": 400}},
+        {"id": "01-md", "prototype": "md",
+         "inputs": {"../00-relax/CONTCAR": "POSCAR"},
+         "overrides": {"IBRION": 0, "NSW": 2000, "POTIM": 1.0, "TEBEG": 300, "TEEND": 300,
+                       "ISIF": 2, "ISYM": 0, "LCHARG": false, "LWAVE": false},
+         "gate": {"type": "file_present", "file": "XDATCAR"}},
+        {"id": "02-post", "prototype": "post", "qvasp": "-msd",
+         "inputs": {"../01-md/XDATCAR": "XDATCAR", "../01-md/POSCAR": "POSCAR"},
+         "gate": {"type": "file_present", "file": "msd.dat"}}
+      ]
+    },
+    "nve": {
+      "stages": [
+        {"id": "00-relax", "prototype": "relax"},
+        {"id": "01-md", "prototype": "md",
+         "inputs": {"../00-relax/CONTCAR": "POSCAR"},
+         "overrides": {"IBRION": 0, "NSW": 2000, "POTIM": 1.0, "SMASS": -3,
+                       "ISIF": 2, "ISYM": 0},
+         "gate": {"type": "file_present", "file": "XDATCAR"}},
+        {"id": "02-post", "prototype": "post", "qvasp": "-mde",
+         "inputs": {"../01-md/OSZICAR": "OSZICAR", "../01-md/OUTCAR": "OUTCAR"},
+         "gate": {"type": "file_present", "file": "mde.dat"}}
+      ]
+    }
+  }
+}

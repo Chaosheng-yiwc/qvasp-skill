@@ -1,0 +1,208 @@
+{
+  "id": "band-hse",
+  "schema": 1,
+  "description": "HSE06 band structure. Strategy 'opt' (VASP >= 6.3): one hybrid run, uniform mesh KPOINTS + band path in KPOINTS_OPT. Strategy 'oneshot': qvasp -khse writes mesh plus zero-weight path in one KPOINTS. Strategy 'twostep': hybrid SCF then an ICHARG=11 band run reusing CHGCAR.",
+  "default_strategy": "opt",
+  "match": {
+    "tasks": [
+      "band"
+    ],
+    "functional": [
+      "hse",
+      "hse06",
+      "hybrid"
+    ]
+  },
+  "strategies": {
+    "opt": {
+      "requires": {
+        "vasp_min": "6.3"
+      },
+      "stages": [
+        {
+          "id": "00-relax",
+          "kind": "calc",
+          "qvasp": "-relax",
+          "overrides": {
+            "ISIF": 3,
+            "EDIFFG": -0.01,
+            "NSW": 200
+          },
+          "gate": {
+            "type": "ionic_converged"
+          }
+        },
+        {
+          "id": "01-scf",
+          "kind": "calc",
+          "qvasp": "-scf",
+          "inputs": {
+            "../00-relax/CONTCAR": "POSCAR"
+          },
+          "overrides": {
+            "LCHARG": true,
+            "LWAVE": true
+          },
+          "gate": {
+            "type": "scf_converged"
+          }
+        },
+        {
+          "id": "02-hse",
+          "kind": "calc",
+          "qvasp": "-hse",
+          "kpoints": "-k 0.03",
+          "kpoints_opt": "-kline",
+          "inputs": {
+            "../01-scf/CONTCAR": "POSCAR",
+            "../01-scf/WAVECAR": "WAVECAR"
+          },
+          "overrides": {
+            "LHFCALC": true,
+            "HFSCREEN": 0.2,
+            "AEXX": 0.25,
+            "ICHARG": 11,
+            "ENCUT": 500,
+            "LORBIT": 11
+          },
+          "gate": {
+            "type": "file_present",
+            "file": "EIGENVAL"
+          }
+        },
+        {
+          "id": "03-post",
+          "kind": "post",
+          "qvasp": "-bandd",
+          "inputs": {
+            "../02-hse/OUTCAR": "OUTCAR",
+            "../02-hse/EIGENVAL": "EIGENVAL"
+          },
+          "gate": {
+            "type": "file_present",
+            "file": "band.dat"
+          }
+        }
+      ]
+    },
+    "oneshot": {
+      "stages": [
+        {
+          "id": "00-relax",
+          "kind": "calc",
+          "qvasp": "-relax",
+          "overrides": {
+            "ISIF": 3,
+            "EDIFFG": -0.01,
+            "NSW": 200
+          },
+          "gate": {
+            "type": "ionic_converged"
+          }
+        },
+        {
+          "id": "01-hse",
+          "kind": "calc",
+          "qvasp": "-hse",
+          "kpoints": "-khse",
+          "inputs": {
+            "../00-relax/CONTCAR": "POSCAR"
+          },
+          "overrides": {
+            "LHFCALC": true,
+            "HFSCREEN": 0.2,
+            "AEXX": 0.25,
+            "LORBIT": 11
+          },
+          "gate": {
+            "type": "file_present",
+            "file": "EIGENVAL"
+          }
+        },
+        {
+          "id": "02-post",
+          "kind": "post",
+          "qvasp": "-bandd",
+          "inputs": {
+            "../01-hse/OUTCAR": "OUTCAR",
+            "../01-hse/EIGENVAL": "EIGENVAL"
+          },
+          "gate": {
+            "type": "file_present",
+            "file": "band.dat"
+          }
+        }
+      ]
+    },
+    "twostep": {
+      "stages": [
+        {
+          "id": "00-relax",
+          "kind": "calc",
+          "qvasp": "-relax",
+          "overrides": {
+            "ISIF": 3,
+            "EDIFFG": -0.01,
+            "NSW": 200
+          },
+          "gate": {
+            "type": "ionic_converged"
+          }
+        },
+        {
+          "id": "01-hse-scf",
+          "kind": "calc",
+          "qvasp": "-scf",
+          "inputs": {
+            "../00-relax/CONTCAR": "POSCAR"
+          },
+          "overrides": {
+            "LHFCALC": true,
+            "HFSCREEN": 0.2,
+            "AEXX": 0.25,
+            "LCHARG": true,
+            "LWAVE": true
+          },
+          "gate": {
+            "type": "scf_converged"
+          }
+        },
+        {
+          "id": "02-hse-band",
+          "kind": "calc",
+          "qvasp": "-band",
+          "kpoints": "-kline",
+          "inputs": {
+            "../01-hse-scf/CONTCAR": "POSCAR",
+            "../01-hse-scf/CHGCAR": "CHGCAR"
+          },
+          "overrides": {
+            "LHFCALC": true,
+            "HFSCREEN": 0.2,
+            "AEXX": 0.25,
+            "ICHARG": 11,
+            "ENCUT": 500,
+            "LORBIT": 11
+          },
+          "gate": {
+            "type": "file_present",
+            "file": "EIGENVAL"
+          }
+        },
+        {
+          "id": "03-post",
+          "kind": "post",
+          "qvasp": "-bandd",
+          "inputs": {
+            "../02-hse-band/OUTCAR": "OUTCAR",
+            "../02-hse-band/EIGENVAL": "EIGENVAL"
+          },
+          "gate": {
+            "type": "file_present",
+            "file": "band.dat"
+          }
+        }
+      ]
+    }
+  }
+}

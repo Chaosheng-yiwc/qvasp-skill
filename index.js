@@ -1,0 +1,158 @@
+/**
+ * qvasp-skill — DeepSeek Harness bundle providing:
+ *   1. the `qvasp` skill (synced to the user's skill library at startup,
+ *      x-version gated so user edits survive plugin upgrades);
+ *   2. the `qvasp` MCP server (stdio, 14 tools: qvasp_run, workflow_*,
+ *      structure_check, result_*, reference_lookup, literature_record,
+ *      report_build) mounted dynamically with package-resolved paths.
+ *
+ * Pure plugin: only public seams (`tools` via the nested MCP entry), zero
+ * DSH core changes, zero runtime dependencies.
+ *
+ * Why dynamic mounting instead of a static cordis.patch.yml insert:
+ * `command`/`args` of an MCP stdio entry must be machine-specific absolute
+ * paths (the python interpreter + the bundled qvasp_mcp.py). Patch configs
+ * are literal strings — the host never rewrites them relative to the
+ * package directory — so a static patch would break on every machine except
+ * the author's. Mounting from `apply()` lets us compute both paths from
+ * `import.meta.url` at runtime, on any machine, with any python found on
+ * PATH (env: QVASP_PYTHON overrides; falls back python3 → python).
+ * @module qvasp-skill
+ */
+
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { homedir, platform } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+/** Package root (the directory containing package.json / server / skills). */
+const PKG = fileURLToPath(new URL('.', import.meta.url))
+
+/** Bundled skill directories (names must stay in sync with skills/). */
+const BUILTIN_SKILLS = ['qvasp']
+
+/** Default user skill library (~/.agents/skills), same as dsh-memory-evolve. */
+const DEFAULT_SKILL_DIR = join(homedir(), '.agents', 'skills')
+
+const MCP_ENTRY_ID = 'qvasp-mcp'
+
+/** Read `x-version` from a SKILL.md frontmatter; CRLF tolerant; default 0. */
+function skillVersion(text) {
+  const m = String(text).match(/^---\r?\n[\s\S]*?^x-version:[ \t]*(\d+)[ \t]*\r?$/m)
+  return m ? Number(m[1]) : 0
+}
+
+/**
+ * Sync bundled skills into the user skill library.
+ * Target missing -> copy; target x-version lower -> overwrite whole dir;
+ * otherwise untouched (user edits protected).
+ * @param {string} pluginSkillsDir - package-internal skills/ directory
+ * @param {string} userSkillsDir - user skill library directory
+ * @returns {Array<{name:string, action:'synced'|'unchanged'|'missing'}>}
+ */
+export function syncBuiltinSkills(pluginSkillsDir, userSkillsDir) {
+  const results = []
+  for (const name of BUILTIN_SKILLS) {
+    const srcDir = join(pluginSkillsDir, name)
+    const srcFile = join(srcDir, 'SKILL.md')
+    if (!existsSync(srcFile)) {
+      results.push({ name, action: 'missing' })
+      continue
+    }
+    const destDir = join(userSkillsDir, name)
+    const destFile = join(destDir, 'SKILL.md')
+    const srcText = readFileSync(srcFile, 'utf8')
+    let action = 'unchanged'
+    const needsCopy = !existsSync(destFile)
+      || skillVersion(srcText) > skillVersion(readFileSync(destFile, 'utf8'))
+    if (needsCopy) {
+      rmSync(destDir, { recursive: true, force: true })
+      mkdirSync(destDir, { recursive: true })
+      cpSync(srcDir, destDir, { recursive: true })
+      action = 'synced'
+    }
+    results.push({ name, action })
+  }
+  return results
+}
+
+/**
+ * Resolve the full MCP client entry config for this machine.
+ * Exported for tests.
+ * @param {object} [config] plugin config (qvaspBin / workroot / scheduler / python)
+ */
+export function mcpEntryConfig(config = {}) {
+  const candidates = []
+  if (config.python) candidates.push(config.python)
+  if (process.env.QVASP_PYTHON) candidates.push(process.env.QVASP_PYTHON)
+  const names = platform() === 'win32' ? ['python', 'python3'] : ['python3', 'python']
+  candidates.push(...names)
+  let python = null
+  for (const cmd of candidates) {
+    const r = spawnSync(cmd, ['--version'], { encoding: 'utf8', timeout: 8000 })
+    if (r.status === 0) { python = cmd; break }
+  }
+  const serverScript = join(PKG, 'server', 'qvasp_mcp.py')
+  if (!python || !existsSync(serverScript)) return null
+  return {
+    id: MCP_ENTRY_ID,
+    name: '@deepseek-ai/dsh-mcp-client',
+    config: {
+      transport: 'stdio',
+      serverName: 'qvasp',
+      command: python,
+      args: [serverScript],
+      failOnStartupError: false,
+      env: {
+        ...(config.qvaspBin ? { QVASP_BIN: config.qvaspBin } : {}),
+        ...(config.workroot ? { QVASP_WORKROOT: config.workroot } : {}),
+        ...(config.scheduler ? { QVASP_SCHEDULER: config.scheduler } : {}),
+      },
+    },
+  }
+}
+
+export function apply(ctx, config = {}) {
+  // 1. Sync the bundled skill into the user skill library. Failure must not
+  //    block the rest of the plugin (same discipline as dsh-memory-evolve).
+  try {
+    const results = syncBuiltinSkills(join(PKG, 'skills'), config.skillDir ?? DEFAULT_SKILL_DIR)
+    for (const r of results) {
+      if (r.action === 'missing') console.warn(`qvasp-skill: bundled skill ${r.name} missing SKILL.md`)
+    }
+  } catch (error) {
+    console.warn('qvasp-skill: skill sync failed:', error?.message ?? error)
+  }
+
+  // 2. Mount the MCP client entry with runtime-resolved paths. Idempotent:
+  //    if an entry with this id already exists (persisted from a previous
+  //    boot), update it instead of creating a duplicate.
+  ctx.effect(() => {
+    const entry = mcpEntryConfig(config)
+    if (!entry) {
+      console.warn(
+        'qvasp-skill: no python interpreter found (set QVASP_PYTHON or put python on PATH);'
+        + ' MCP tools will not be available. The qvasp skill itself still works.',
+      )
+      return
+    }
+    const loader = ctx.loader
+    if (loader?.create) {
+      try {
+        loader.resolve(MCP_ENTRY_ID)
+        // Already mounted (persisted journal or duplicate boot) — update in place.
+        loader.update(MCP_ENTRY_ID, { id: entry.id, name: entry.name, config: entry.config })
+        return
+      } catch {
+        // resolve() throws when absent -> create it.
+      }
+      loader.create({ id: entry.id, name: entry.name, config: entry.config })
+    } else {
+      console.warn('qvasp-skill: loader service not reachable; MCP entry not mounted')
+    }
+    return () => {
+      try { loader?.remove?.(MCP_ENTRY_ID) } catch { /* already gone */ }
+    }
+  }, 'qvasp-skill: mcp entry')
+}

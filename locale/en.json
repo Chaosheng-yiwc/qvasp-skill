@@ -1,0 +1,9 @@
+{
+  "meta": {
+    "title": "qvasp toolkit",
+    "description": "Ships the qvasp command reference, VASP workflows and verified pitfalls as a skill, so the agent never guesses a flag.",
+    "detail": "docs/DETAIL.md"
+  }
+}
+
+

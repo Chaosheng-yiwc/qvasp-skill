@@ -1,0 +1,9 @@
+{
+  "meta": {
+    "title": "qvasp 工具包",
+    "description": "把 qvasp 的 88 条命令、VASP 工作流与已验证的坑点做成技能，agent 不再猜参数。",
+    "detail": "docs/DETAIL.md"
+  }
+}
+
+

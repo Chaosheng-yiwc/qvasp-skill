@@ -1,0 +1,13 @@
+# qvasp-skill bundle patch.
+#
+# The host plugin (index.js) does the machine-specific work at runtime:
+#   - syncs skills/qvasp into the user skill library (~/.agents/skills),
+#   - mounts the MCP client entry with package-resolved python + script paths.
+# Do NOT add the skill-filesystem or mcp-client rows here with absolute
+# paths — patch configs are literal strings and would break on any other
+# machine. See index.js apply() for the runtime mounting.
+- insert:
+    - id: qvasp-skill
+      name: qvasp-skill
+      config:
+        {}

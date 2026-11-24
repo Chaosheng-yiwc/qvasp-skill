@@ -1,0 +1,48 @@
+{
+  "id": "phonon-pbe",
+  "schema": 1,
+  "description": "Phonons on a 2x2x2 supercell: relax -> phonopy init + finite-displacement forces -> phonopy FORCE_CONSTANTS -> phonond. The force evaluation is 2x2x2 x 2 atoms = 16 atoms, one IBRION=8 run per displaced atom.",
+  "match": {"tasks": ["phonon"], "functional": ["pbe", "gga"]},
+  "stages": [
+    {
+      "id": "00-relax",
+      "prototype": "relax",
+      "overrides": {"ISIF": 3, "EDIFFG": -0.001, "NSW": 200, "ENCUT": 600},
+      "note": "Phonons need a much tighter EDIFFG than a geometry screening: -0.001 eV/A, not -0.01."
+    },
+    {
+      "id": "01-init",
+      "kind": "post",
+      "qvasp": "-phonon",
+      "inputs": {"../00-relax/CONTCAR": "POSCAR"},
+      "gate": {"type": "file_present", "file": "band.conf"},
+      "note": "-phonon takes named options (--dim 3|2|1, --vac N, --chain N, --n POINTS, --out FILE), never a positional argument: 'qvasp -phonon 2 2 2' is read as 'use the file named 2'. Defaults are 3D and 51 points per segment."
+    },
+    {
+      "id": "02-forces",
+      "kind": "manual",
+      "inputs": {"../00-relax/CONTCAR": "POSCAR"},
+      "requires": ["POSCAR", "POTCAR"],
+      "produces": ["FORCE_SETS"],
+      "gate": {"type": "file_present", "file": "FORCE_SETS"},
+      "note": "phonopy-init vasp -c POSCAR --dim \"2 2 2\" writes disp-*/; submit one IBRION=8 VASP run in each of them, then phonopy -f disp-*/vasprun.xml. The tool stops here because phonopy is not a qvasp command."
+    },
+    {
+      "id": "03-fc",
+      "kind": "manual",
+      "inputs": {"../02-forces/FORCE_SETS": "FORCE_SETS"},
+      "requires": ["FORCE_SETS"],
+      "produces": ["FORCE_CONSTANTS"],
+      "gate": {"type": "file_present", "file": "FORCE_CONSTANTS"},
+      "note": "phonopy --dim \"2 2 2\" --fc-symmetry writes FORCE_CONSTANTS. Run it here, then call workflow_resume."
+    },
+    {
+      "id": "04-post",
+      "prototype": "post",
+      "qvasp": "-phonond",
+      "inputs": {"../03-fc/FORCE_CONSTANTS": "FORCE_CONSTANTS",
+                 "../01-init/band.conf": "band.conf"},
+      "gate": {"type": "file_present", "file": "PhononBAND.dat"}
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "id": "dos-pbe",
+  "schema": 1,
+  "description": "PBE density of states: relax -> SCF (CHGCAR) -> NSCF on a dense mesh with ICHARG=11 -> dosd",
+  "match": {
+    "tasks": [
+      "dos"
+    ],
+    "functional": [
+      "pbe",
+      "gga",
+      "lda"
+    ]
+  },
+  "stages": [
+    {
+      "id": "00-relax",
+      "prototype": "relax"
+    },
+    {
+      "id": "01-scf",
+      "prototype": "scf",
+      "inputs": {
+        "../00-relax/CONTCAR": "POSCAR"
+      }
+    },
+    {
+      "id": "02-dos",
+      "prototype": "nscf",
+      "qvasp": "-dos",
+      "kpoints": "-k 0.02",
+      "inputs": {
+        "../01-scf/CONTCAR": "POSCAR",
+        "../01-scf/CHGCAR": "CHGCAR"
+      },
+      "overrides": {
+        "ICHARG": 11,
+        "ENCUT": 500,
+        "ISMEAR": -5,
+        "NEDOS": 3000,
+        "LORBIT": 11
+      },
+      "gate": {
+        "type": "file_present",
+        "file": "DOSCAR"
+      }
+    },
+    {
+      "id": "03-post",
+      "prototype": "post",
+      "qvasp": "-dosd",
+      "inputs": {
+        "../02-dos/DOSCAR": "DOSCAR"
+      },
+      "gate": {
+        "type": "file_present",
+        "file": "DOS0.dat"
+      }
+    }
+  ]
+}

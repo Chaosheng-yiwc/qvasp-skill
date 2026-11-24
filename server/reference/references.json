@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "comment": "Reference values for result.compare. Every record carries a source with a DOI/URL and the date it was retrieved. Values without a source must not be added: an unsourced number is reported as 'unverified' by the analyser. bias_expectation holds the typical systematic error of the named method (fractional, negative = method underestimates).",
+  "records": [
+    {
+      "id": "si-gap-exp",
+      "material": {"formula": "Si", "phase": "diamond", "spacegroup": "Fd-3m"},
+      "property": "band_gap",
+      "value": 1.17,
+      "unit": "eV",
+      "uncertainty": 0.01,
+      "method": {"kind": "experiment", "conditions": "T -> 0 K, indirect gap (A = 1.170 eV in Eg(T) = A + BT + CT^2)"},
+      "source": {"type": "doi", "id": "10.1063/1.1663501", "url": "https://pubs.aip.org/aip/jap/article-abstract/45/4/1846/507373/Temperature-dependence-of-the-band-gap-of-silicon", "retrieved": "2026-11-23", "citation": "Bludau, Onton, Heinke, J. Appl. Phys. 45, 1846 (1974)"},
+      "bias_expectation": {"pbe": -0.45, "hse": -0.10}
+    },
+    {
+      "id": "diamond-raman-exp",
+      "material": {"formula": "C", "phase": "diamond", "spacegroup": "Fd-3m"},
+      "property": "phonon_gamma_optical",
+      "value": 1332.5,
+      "unit": "cm^-1",
+      "uncertainty": 1.0,
+      "method": {"kind": "experiment", "conditions": "room temperature, first-order Raman, triply degenerate F2g"},
+      "source": {"type": "url", "id": "https://ntrs.nasa.gov/api/citations/20030113133/downloads/20030113133.pdf", "url": "https://ntrs.nasa.gov/api/citations/20030113133/downloads/20030113133.pdf", "retrieved": "2026-11-23", "citation": "NASA NTRS 20030113133: diamond Raman line at 1332 cm-1 (value quoted as 1332-1332.5)"},
+      "bias_expectation": {"pbe": -0.025, "hse": -0.01}
+    },
+    {
+      "id": "mgo-gap-exp",
+      "material": {"formula": "MgO", "phase": "rocksalt", "spacegroup": "Fm-3m"},
+      "property": "band_gap",
+      "value": 7.8,
+      "unit": "eV",
+      "uncertainty": 0.1,
+      "method": {"kind": "experiment", "conditions": "optical gap, room temperature"},
+      "source": {"type": "url", "id": "http://w0.rz-berlin.mpg.de/hjfdb/pdf/643e.pdf", "url": "http://w0.rz-berlin.mpg.de/hjfdb/pdf/643e.pdf", "retrieved": "2026-11-23", "citation": "MgO wide-gap insulator, gap about 7.8 eV (review PDF, Fritz-Haber-Institut)"},
+      "bias_expectation": {"pbe": -0.45, "hse": -0.10}
+    },
+    {
+      "id": "hcp-co-k1-exp",
+      "material": {"formula": "Co", "phase": "hcp"},
+      "property": "mae_K1",
+      "value": 0.53,
+      "unit": "MJ/m^3",
+      "uncertainty": 0.08,
+      "method": {"kind": "experiment", "conditions": "room temperature, K1 with easy axis c; literature spread 0.45-0.53 MJ/m^3"},
+      "source": {"type": "url", "id": "https://theses.hal.science/tel-00392596/document", "url": "https://theses.hal.science/tel-00392596/document", "retrieved": "2026-11-23", "citation": "Experimental anisotropy constants of hcp Co compiled in a thesis (table 3.1), after Paige 1984"},
+      "bias_expectation": {"pbe": 0.0, "hse": 0.0}
+    },
+    {
+      "id": "stio3-softmode-exp",
+      "material": {"formula": "SrTiO3", "phase": "cubic", "spacegroup": "Pm-3m"},
+      "property": "soft_mode_gamma",
+      "value": 90.0,
+      "unit": "cm^-1",
+      "uncertainty": 30.0,
+      "method": {"kind": "experiment", "conditions": "room temperature, TO1 soft mode of the incipient ferroelectric (underdamped, strongly temperature dependent)"},
+      "source": {"type": "doi", "id": "10.1103/RevModPhys.70.1039", "url": "https://doi.org/10.1103/RevModPhys.70.1039", "retrieved": "2026-11-23", "citation": "A. S. Barker / reviews of the SrTiO3 soft mode; value quoted as an order-of-magnitude reference, not a benchmark"},
+      "bias_expectation": {"pbe": -1.0}
+    },
+    {
+      "id": "si-lattice-exp",
+      "material": {"formula": "Si", "phase": "diamond", "spacegroup": "Fd-3m"},
+      "property": "lattice_constant",
+      "value": 5.431,
+      "unit": "Angstrom",
+      "uncertainty": 0.001,
+      "method": {"kind": "experiment", "conditions": "room temperature"},
+      "source": {"type": "doi", "id": "10.1103/PhysRev.98.978", "url": "https://doi.org/10.1103/PhysRev.98.978", "retrieved": "2026-11-23", "citation": "classical Si lattice constant reference (a = 5.431 A at 300 K)"},
+      "bias_expectation": {"pbe": 0.005, "hse": 0.003}
+    }
+  ]
+}

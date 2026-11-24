@@ -1,0 +1,27 @@
+{
+  "id": "surface-pbe",
+  "schema": 1,
+  "description": "Surface energy of a slab: bulk SCF (reference energy per atom) and a slab SCF, then -esurf. The slab must be cleaved and passivated first; -cls only cuts the plane, it does not decide the termination. Put the bulk cell in POSCAR and the cleaved slab in POSCAR-slab at the system root.",
+  "match": {"tasks": ["surface", "slab", "esurf", "adsorption"]},
+  "default_strategy": "slab",
+  "strategies": {
+    "slab": {
+      "stages": [
+        {"id": "00-bulk", "prototype": "scf",
+         "overrides": {"ISIF": 3, "EDIFFG": -0.01, "NSW": 100, "ENCUT": 500},
+         "gate": {"type": "ionic_converged"}},
+        {"id": "01-slab", "prototype": "scf",
+         "inputs": {"POSCAR-slab": "POSCAR"},
+         "overrides": {"ISIF": 2, "EDIFFG": -0.01, "NSW": 200, "ENCUT": 500},
+         "gate": {"type": "ionic_converged"}},
+        {"id": "02-post", "prototype": "post", "qvasp": "-esurf",
+         "inputs": {"../00-bulk/OUTCAR": "bulk/OUTCAR",
+                    "../00-bulk/CONTCAR": "bulk/CONTCAR",
+                    "../01-slab/OUTCAR": "slab/OUTCAR",
+                    "../01-slab/CONTCAR": "slab/CONTCAR"},
+         "stdin": ["bulk", "1", "slab", "8"],
+         "gate": {"type": "file_present", "file": "esurf.dat"}}
+      ]
+    }
+  }
+}

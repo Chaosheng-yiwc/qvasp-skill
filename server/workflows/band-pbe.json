@@ -1,0 +1,55 @@
+{
+ "id": "band-pbe",
+ "schema": 1,
+ "description": "PBE band structure: relax -> SCF (CHGCAR) -> NSCF line-mode band -> bandd",
+ "match": {
+  "tasks": [
+   "band"
+  ],
+  "functional": [
+   "pbe",
+   "gga",
+   "lda"
+  ]
+ },
+ "stages": [
+  {
+   "id": "00-relax",
+   "prototype": "relax"
+  },
+  {
+   "id": "01-scf",
+   "prototype": "scf",
+   "inputs": {
+    "../00-relax/CONTCAR": "POSCAR"
+   }
+  },
+  {
+   "id": "02-band",
+   "prototype": "nscf",
+   "kpoints": "-kline",
+   "inputs": {
+    "../01-scf/CONTCAR": "POSCAR",
+    "../01-scf/CHGCAR": "CHGCAR"
+   },
+   "gate": {
+    "type": "file_present",
+    "file": "EIGENVAL"
+   }
+  },
+  {
+   "id": "03-post",
+   "prototype": "post",
+   "qvasp": "-bandd",
+   "inputs": {
+    "../02-band/OUTCAR": "OUTCAR",
+    "../02-band/EIGENVAL": "EIGENVAL",
+    "../02-band/POSCAR": "POSCAR"
+   },
+   "gate": {
+    "type": "file_present",
+    "file": "band.dat"
+   }
+  }
+ ]
+}
