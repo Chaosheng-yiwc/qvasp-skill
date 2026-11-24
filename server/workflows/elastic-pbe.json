@@ -2,26 +2,51 @@
   "id": "elastic-pbe",
   "schema": 1,
   "description": "Elastic constants: tight relax, then IBRION=6 at ENCUT=1000 (the stress response is far more cutoff-sensitive than the energy), then -elasticd. The relaxed cell must be the input: a symmetry-broken starting structure gives a tensor that cannot be inverted.",
-  "match": {"tasks": ["elastic", "mechanical"]},
+  "match": {
+    "tasks": [
+      "elastic",
+      "mechanical"
+    ]
+  },
   "stages": [
     {
       "id": "00-relax",
       "prototype": "relax",
-      "overrides": {"ISIF": 3, "EDIFFG": -0.001, "NSW": 200, "ENCUT": 600, "EDIFF": "1E-7"},
-      "gate": {"type": "ionic_converged"}
+      "overrides": {
+        "ISIF": 3,
+        "EDIFFG": -0.001,
+        "NSW": 200,
+        "ENCUT": 600,
+        "EDIFF": "1E-7"
+      },
+      "gate": {
+        "type": "ionic_converged"
+      }
     },
     {
       "id": "01-elastic",
       "prototype": "elastic",
-      "inputs": {"../00-relax/CONTCAR": "POSCAR"},
-      "gate": {"type": "file_present", "file": "OUTCAR"}
+      "inputs": {
+        "../00-relax/CONTCAR": "POSCAR"
+      },
+      "gate": {
+        "type": "file_present",
+        "file": "OUTCAR"
+      }
     },
     {
       "id": "02-post",
       "prototype": "post",
       "qvasp": "-elasticd",
-      "inputs": {"../01-elastic/OUTCAR": "OUTCAR"},
-      "gate": {"type": "file_present", "file": "ELASTIC_TENSOR"}
+      "inputs": {
+        "../01-elastic/OUTCAR": "OUTCAR",
+        "../POSCAR": "POSCAR"
+      },
+      "gate": {
+        "type": "file_present",
+        "file": "ELASTIC_TENSOR"
+      },
+      "note": "-elasticd needs OUTCAR, the elastic tensor, and POSCAR (for the space group template). POSCAR falls back to the root copy if 00-relax left none."
     }
   ]
 }

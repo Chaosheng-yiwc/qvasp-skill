@@ -25,7 +25,7 @@
       "requires": ["POSCAR", "POTCAR"],
       "produces": ["FORCE_SETS"],
       "gate": {"type": "file_present", "file": "FORCE_SETS"},
-      "note": "phonopy-init vasp -c POSCAR --dim \"2 2 2\" writes disp-*/; submit one IBRION=8 VASP run in each of them, then phonopy -f disp-*/vasprun.xml. The tool stops here because phonopy is not a qvasp command."
+      "note": "phonopy-init vasp -c POSCAR --dim \"2 2 2\" writes disp-*/; submit one IBRION=8 VASP run in each of them, then phonopy-init -f disp-*/vasprun.xml. The tool stops here because phonopy is not a qvasp command."
     },
     {
       "id": "03-fc",
