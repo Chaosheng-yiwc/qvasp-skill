@@ -34,6 +34,13 @@ Inside DeepSeek Harness (plugin market or CLI):
 dsh plugin --profile <your-profile> add qvasp-skill
 ```
 
+or via npm:
+
+```
+npm install -g qvasp-skill
+dsh plugin --profile <your-profile> add qvasp-skill
+```
+
 or from GitHub releases:
 
 ```
