@@ -89,11 +89,31 @@ def run_qvasp(args):
         return err(f"unknown qvasp command {sub[:1]}; see qvasp_help")
     cwd = safe_cwd(args.get("cwd", "."))
     argv = [QVASP_BIN] + cmd.split()
-    stdin = "\n".join(args.get("stdin", [])) + ("\n" if args.get("stdin") else "")
+    stdin = "\n".join(args.get("stdin", [])) + ("\n" if args.get("stdin", []) else "")
     before = {p.name for p in cwd.iterdir() if p.is_file()}
     t0 = time.time()
+    run_env = None
+    env_src = args.get("env_sources")
+    if env_src:
+        # `subprocess.run("export ...", shell=True, env=env)` cannot mutate the
+        # parent dict — each shell exits with its own copy.  The sources are
+        # therefore applied here as text: PATH gets appended, KEY=VALUE pairs
+        # are set, and only truly sourced files would still need a wrapper.
+        run_env = dict(os.environ)
+        for part in env_src.split("\n"):
+            part = part.strip()
+            if not part:
+                continue
+            if part.startswith("export PATH"):
+                extra = part.split("=", 1)[1].replace("$PATH", run_env.get("PATH", ""))
+                run_env["PATH"] = extra
+            elif part.startswith("export "):
+                kv = part[len("export "):]
+                if "=" in kv:
+                    k, v = kv.split("=", 1)
+                    run_env[k] = v.replace("$PATH", run_env.get("PATH", ""))
     proc = subprocess.run(argv, cwd=str(cwd), input=stdin, capture_output=True, text=True,
-                          timeout=args.get("timeout_s", 600))
+                          timeout=args.get("timeout_s", 600), env=run_env)
     out = (proc.stdout or "") + (proc.stderr or "")
     after = {p.name for p in cwd.iterdir() if p.is_file()}
     return {
@@ -412,6 +432,9 @@ mpirun -n $NP {vasp} > vasp.log 2>&1
 ENV_SOURCES = os.environ.get(
     "QVASP_ENV_SOURCES",
     "source /public/environment/intel2020.env\nsource /public/environment/impi2019.env")
+POST_ENV_SOURCES = os.environ.get(
+    "QVASP_POST_ENV_SOURCES",
+    "export PATH=$PATH:$HOME/.local/bin")
 QUEUE = os.environ.get("QVASP_QUEUE", "batch")
 
 # Torque lives outside the login PATH on this cluster; look for it explicitly
@@ -576,7 +599,9 @@ def tool_workflow_run(args):
                     "hint": "post stage skipped in dry run: its inputs do not exist yet"}
         log = ""
         if stage.get("qvasp"):
-            r = run_qvasp({"command": stage["qvasp"], "cwd": str(cwd), "stdin": stage.get("stdin", [])})
+            extra_env = POST_ENV_SOURCES if kind == "post" else ""
+            r = run_qvasp({"command": stage["qvasp"], "cwd": str(cwd), "stdin": stage.get("stdin", []),
+                           "env_sources": extra_env})
             log = r["stdout_tail"]
             if r["exit_code"] != 0 or r["qvasp_error"]:
                 rec.update(state="failed", error=log)
