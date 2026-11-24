@@ -62,12 +62,14 @@
             "HFSCREEN": 0.2,
             "AEXX": 0.25,
             "ENCUT": 500,
-            "LORBIT": 11
+            "LORBIT": 11,
+            "NCORE": 1
           },
           "gate": {
             "type": "file_present",
             "file": "EIGENVAL"
-          }
+          },
+          "note": "KPOINTS_OPT single job: a self-consistent mesh SCF runs first, then the band path. NCORE=1 is mandatory (VASP refuses NCORE/=1 with KPOINTS_OPT+hybrid). If this VASP build segfaults at the first exact-exchange step, use the twostep strategy or a hybrid-capable binary; the strategy logic itself is validated by a PBE KPOINTS_OPT run."
         },
         {
           "id": "03-post",

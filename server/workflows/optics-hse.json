@@ -54,12 +54,14 @@
             "LOPTICS": true,
             "NEDOS": 2000,
             "CSHIFT": 0.1,
-            "NBANDS": 96
+            "NBANDS": 96,
+            "NCORE": 1
           },
           "gate": {
             "type": "file_present",
             "file": "vasprun.xml"
-          }
+          },
+          "note": "KPOINTS_OPT single job: a self-consistent mesh SCF runs first, then the band path. NCORE=1 is mandatory (VASP refuses NCORE/=1 with KPOINTS_OPT+hybrid). If this VASP build segfaults at the first exact-exchange step, use the twostep strategy or a hybrid-capable binary; the strategy logic itself is validated by a PBE KPOINTS_OPT run."
         },
         {
           "id": "03-post",
@@ -116,7 +118,8 @@
           "gate": {
             "type": "file_present",
             "file": "vasprun.xml"
-          }
+          },
+          "note": "KPOINTS_OPT single job: a self-consistent mesh SCF runs first, then the band path. NCORE=1 is mandatory (VASP refuses NCORE/=1 with KPOINTS_OPT+hybrid). If this VASP build segfaults at the first exact-exchange step, use the twostep strategy or a hybrid-capable binary; the strategy logic itself is validated by a PBE KPOINTS_OPT run."
         },
         {
           "id": "03-post",
