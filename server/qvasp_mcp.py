@@ -681,6 +681,9 @@ def tool_structure_check(args):
 
 
 def tool_result_extract(args):
+    if "file" not in args or "kind" not in args:
+        return err("result_extract needs 'file' (e.g. OUTCAR/EIGENVAL/DOSCAR) and 'kind' "
+                   "(known: band_gap, dos_at_ef, mae, phonon_min, rdf_first_peak, thermo)")
     parsers, _, _, _ = _analysis()
     path = safe_cwd(args.get("cwd", ".")) / args["file"]
     if not path.exists():
