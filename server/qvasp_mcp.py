@@ -40,10 +40,24 @@ _cmds = None
 
 
 def qvasp_commands():
+    """Whitelist of real qvasp commands, parsed from `qvasp -h` once.
+
+    Returns [] when the binary is unavailable (not installed / QVASP_BIN wrong):
+    every caller must treat an empty whitelist as "cannot verify command names"
+    rather than "no commands exist"."""
     global _cmds
     if _cmds is None:
-        out = subprocess.run([QVASP_BIN, "-h"], capture_output=True, text=True, timeout=30).stdout
-        _cmds = sorted(set(re.findall(r"qvasp\s+(-[A-Za-z0-9_]+)", out)))
+        try:
+            out = subprocess.run([QVASP_BIN, "-h"], capture_output=True, text=True,
+                                 timeout=30).stdout
+            _cmds = sorted(set(re.findall(r"qvasp\s+(-[A-Za-z0-9_]+)", out)))
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            # FileNotFoundError when qvasp is not on PATH; keep the server usable
+            # for template linting and analysis tools that do not need the binary.
+            _cmds = []
+            print(f"[qvasp_mcp] warning: cannot run '{QVASP_BIN} -h' ({exc}); "
+                  f"command whitelist unavailable. Install qvasp or set QVASP_BIN.",
+                  file=sys.stderr)
     return _cmds
 
 
@@ -68,6 +82,9 @@ def run_qvasp(args):
     workflow stage can call it without re-entering the workflow runner."""
     cmd = str(args["command"]).strip()
     sub = [tok for tok in cmd.split() if tok.startswith("-")]
+    if not qvasp_commands():
+        return err(f"qvasp binary not available (tried '{QVASP_BIN} -h'); "
+                   f"install qvasp or set QVASP_BIN")
     if not sub or sub[0] not in qvasp_commands():
         return err(f"unknown qvasp command {sub[:1]}; see qvasp_help")
     cwd = safe_cwd(args.get("cwd", "."))
@@ -194,15 +211,17 @@ def validate_template(tpl):
                 elif gate.get("type") == "file_present" and not gate.get("file"):
                     problems.append(f"[{strat}] stage {sid} file_present gate names no file")
             cmd = st.get("qvasp")
-            if cmd and cmd.split()[0] not in qvasp_commands():
+            # Skip command-name checks when the qvasp binary is unavailable
+            # (empty whitelist): linting structure/gates must not depend on it.
+            if cmd and qvasp_commands() and cmd.split()[0] not in qvasp_commands():
                 problems.append(f"[{strat}] stage {sid} runs {cmd}, not a qvasp command")
             if st.get("kind") == "manual" and not (st.get("note") or "").strip():
                 problems.append(f"[{strat}] manual stage {sid} has no note saying what to do")
             if st.get("kind") == "manual" and not st.get("gate"):
                 problems.append(f"[{strat}] manual stage {sid} has no gate to tell when it is done")
-            if st.get("kpoints") and st["kpoints"].split()[0] not in qvasp_commands():
+            if st.get("kpoints") and qvasp_commands() and st["kpoints"].split()[0] not in qvasp_commands():
                 problems.append(f"[{strat}] stage {sid} kpoints {st['kpoints']} is not a command")
-            if st.get("kpoints_opt") and st["kpoints_opt"].split()[0] not in qvasp_commands():
+            if st.get("kpoints_opt") and qvasp_commands() and st["kpoints_opt"].split()[0] not in qvasp_commands():
                 problems.append(f"[{strat}] stage {sid} kpoints_opt {st['kpoints_opt']} is not a command")
             available |= set(st.get("produces") or [])
     return {"workflow": tpl.get("id"), "strategies": strats, "stages": total,
