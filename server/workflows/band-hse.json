@@ -61,7 +61,6 @@
             "LHFCALC": true,
             "HFSCREEN": 0.2,
             "AEXX": 0.25,
-            "ICHARG": 11,
             "ENCUT": 500,
             "LORBIT": 11
           },
