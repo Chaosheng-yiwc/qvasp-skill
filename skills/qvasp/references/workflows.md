@@ -50,8 +50,17 @@ ERROR: charge density could not be read from file CHGCAR for ICHARG>10
 ```
 
 The `scf` prototype raises `ENCUT` to 500, so `nscf`, `dos-pbe/02-dos` and the
-`ICHARG = 11` stages of `band-hse` (`opt`, `twostep`) all pin `ENCUT` to 500 as well. Change
+`ICHARG = 11` stage of `band-hse` (`twostep`) all pin `ENCUT` to 500 as well. Change
 the pair together or the second stage dies on a perfectly good CHGCAR.
+
+The `opt` strategies of `band-hse` / `optics-hse` do NOT set `ICHARG = 11` — a
+`KPOINTS_OPT` job runs a self-consistent mesh SCF first and would produce garbage
+with `ICHARG = 11`. They pin `NCORE = 1` instead: VASP refuses `NCORE /= 1` with
+`KPOINTS_OPT` + hybrid (`I REFUSE TO CONTINUE`). If your VASP build segfaults
+(`forrtl: severe (174)`) at the first exact-exchange step, that is a cluster binary
+limitation — switch to the `twostep` strategy or use a hybrid-capable binary. The
+opt strategy mechanics (mesh SCF → band batches → `-bandd` on the `KPOINTS_OPT`
+EIGENVAL) were validated end-to-end with a PBE run.
 
 A stage with `"kind": "manual"` is not a qvasp command — phonopy is the usual case.
 The tool prepares the directory, records `state="manual"` with the note explaining the

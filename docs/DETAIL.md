@@ -72,11 +72,18 @@ one line (or reinstall from the new location).
 - Cluster paths, scheduler names and POTCAR library entries are environment-specific and
   are kept out of the skill body on purpose. The MCP server reads them from the
   environment, with the cluster values as defaults.
-- `band-hse`'s `opt` strategy needs VASP ≥ 6.3 (KPOINTS_OPT) and has not been run
-  end-to-end on real VASP yet; `oneshot` and `twostep` do not depend on it.
+- `band-hse`'s `opt` strategy needs VASP ≥ 6.3 (KPOINTS_OPT). It was driven end to end
+  with real PBS jobs: `00-relax` and `01-scf` completed, and the `KPOINTS_OPT` mechanism
+  itself was validated with a PBE run (mesh SCF, band batches, `-bandd` output matching
+  the `KPOINTS_OPT` EIGENVAL). The final hybrid numbers could not be produced on the
+  college cluster: its `vasp_std` 6.5.1 segfaults at the first exact-exchange step
+  regardless of ranks/KPAR/`KPOINTS_OPT` (6-job isolation matrix, 2026-11-24) — a
+  cluster binary limitation, not a template bug. `NCORE = 1` is mandatory with
+  `KPOINTS_OPT` + hybrid (VASP refuses anything else); the templates now set it.
 - Of the ten templates, `band-pbe`, `relax-only`, `md-pbe`, `surface-pbe` and
   `freqfix-molecule` have been through a dry run; `band-pbe` and `relax-only` have also
-  submitted real jobs. `dos-pbe`, `phonon-pbe`, `optics-hse` and `elastic-pbe` are linted
-  but not yet run end to end.
+  submitted real jobs, and `band-hse` reached stage `02-hse` for real (see above).
+  `dos-pbe`, `phonon-pbe`, `optics-hse` and `elastic-pbe` are linted but not yet run
+  end to end.
 
 
