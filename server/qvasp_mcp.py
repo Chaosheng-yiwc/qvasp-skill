@@ -680,7 +680,11 @@ def tool_status(args):
 
 
 def tool_resume(args):
-    return tool_workflow_run({"workflow": args["workflow"], "system": args.get("system", "."),
+    wf = args.get("workflow")
+    if not wf:
+        return err("workflow_resume needs 'workflow' (and 'system', the case directory); "
+                   "list valid names with workflow_check")
+    return tool_workflow_run({"workflow": wf, "system": args.get("system", "."),
                               "strategy": args.get("strategy")})
 
 
