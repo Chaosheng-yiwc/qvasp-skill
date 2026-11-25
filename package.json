@@ -1,6 +1,6 @@
 {
     "name":  "qvasp-skill",
-    "version":  "1.3.2",
+    "version":  "1.4.0",
     "description":  "qvasp toolkit for DeepSeek Harness: 88-command VASP reference skill + MCP server (17 tools) for task analysis, result analysis, error diagnosis, and standard workflows",
     "license":  "MIT",
     "author":  {

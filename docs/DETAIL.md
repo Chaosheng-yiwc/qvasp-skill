@@ -70,6 +70,14 @@ thermodynamics, RDF first peak — returns `unsupported` instead of guessing whe
 not parse), `result_compare`, `reference_lookup`, `literature_record`, `report_build`
 (writes a five-section `report.md`).
 
+`report_build` needs only the case directory: with no `extract` list it looks for the known
+outputs itself, one level deep, **last stage first**, and prints the relative path behind
+every number. The order matters — each stage of a workflow keeps its own `EIGENVAL`, so
+reading `00-relax/EIGENVAL` (relaxation, its own coarse mesh) instead of
+`03-post/EIGENVAL` (band path) reports 4.1241 eV over 145 k-points where the answer is
+4.1199 eV over 210. Quantities it could not find are listed with the file names it tried,
+so a missing number is visibly missing rather than absent from the table.
+
 `result_extract` accepts a file only after proving it is the type the requested value
 needs: an EIGENVAL is recognised by `nbands` rows of `(band, energy, occupation)` in its
 first k-block, a two-column `band.dat` must be >95% two-column lines, and a truncated

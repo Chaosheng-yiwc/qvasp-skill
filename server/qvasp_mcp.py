@@ -792,33 +792,65 @@ def tool_literature_record(args):
 
 def tool_report_build(args):
     _, structure, _, report = _analysis()
-    cwd = safe_cwd(args.get("system", "."))
+    raw = str(args.get("system") or "").strip()
+    if not raw:
+        return err("report_build needs 'system' (the case directory, relative to QVASP_WORKROOT); "
+                   "it does not default to the workroot root, because that writes report.md "
+                   "outside the case it is supposed to describe")
+    target = (WORKROOT / raw).resolve() if not os.path.isabs(raw) else Path(raw).resolve()
+    if WORKROOT != target and WORKROOT not in target.parents:
+        return err(f"cwd {target} is outside QVASP_WORKROOT {WORKROOT}")
+    if not target.is_dir():
+        return err(f"report_build: {target} does not exist; it reports on a directory that already holds a run")
+    poscar = target / str(args.get("poscar") or "POSCAR")
+    extracts = args.get("extract") or []
+    compares = args.get("compare") or []
+    if not (target / STATE).exists() and not poscar.exists() and not extracts:
+        return err(f"report_build: nothing to report in {target} "
+                   f"(no {STATE}, no {poscar.name}, no 'extract' items); "
+                   "pass the case directory that holds the run, or the values to extract")
+    for item in extracts:
+        if not isinstance(item, dict) or not item.get("file") or not item.get("kind"):
+            return err("each 'extract' item needs 'file' and 'kind', "
+                       r'e.g. {"file": "EIGENVAL", "kind": "band_gap"}')
+    for item in compares:
+        if not isinstance(item, dict) or not item.get("property") or item.get("value") is None:
+            return err("each 'compare' item needs 'property' and 'value', "
+                       r'e.g. {"property": "band_gap", "value": 4.12, "unit": "eV"}')
+    cwd = safe_cwd(raw)
     st = None
-    poscar = cwd / args.get("poscar", "POSCAR")
     if poscar.exists():
         st = structure.check(str(poscar))
     extracted = []
-    for item in args.get("extract", []):
+    for item in extracts:
         p = cwd / item["file"]
         if p.exists():
             parsers, _, _, _ = _analysis()
             extracted.append(parsers.extract(item["kind"], str(p)))
+    auto_missing = None
+    if str(args.get("auto") or "").lower() in ("1", "true", "yes", "on") or (
+            not extracts and not compares):
+        # Nothing was named: read whatever the directory actually holds instead
+        # of asking the caller to guess the file layout first.
+        parsers, _, _, _ = _analysis()
+        auto, auto_missing = parsers.discover(str(cwd))
+        extracted.extend(auto)
     comparisons = []
-    for item in args.get("compare", []):
+    for item in compares:
         _, _, compare, _ = _analysis()
         hits = compare.lookup(item["property"], item.get("formula"), item.get("phase"))
         if hits:
-            r = compare.compare({"value": item["value"], "unit": item["unit"]},
+            r = compare.compare({"value": item["value"], "unit": item.get("unit", "")},
                                 hits[0], item.get("method", "pbe"))
             r["property"] = item["property"]
             comparisons.append(r)
         else:
             comparisons.append({"property": item["property"], "verdict": "unverified",
                                 "computed": item["value"], "reference": None,
-                                "unit": item["unit"], "reason": "no sourced reference"})
+                                "unit": item.get("unit", ""), "reason": "no sourced reference"})
     return report.build(str(cwd), title=args.get("title"), structure=st,
                         extracted=extracted, comparisons=comparisons,
-                        notes=args.get("notes"))
+                        notes=args.get("notes"), missing=auto_missing)
 
 
 # -------------------------------------------------------------- diagnosis --
@@ -1075,12 +1107,30 @@ TOOLS = {
                               "citation": {"type": "string"}, "doi": {"type": "string"},
                               "url": {"type": "string"}}, "required": ["property", "value"]}},
     "report_build": {"fn": tool_report_build,
-                     "desc": "Write <system>/report.md from structure, values and comparisons",
+                     "desc": ("Write <system>/report.md: provenance, structure check, values "
+                              "(each with the file it came from), comparison with references, "
+                              "verdict. With no 'extract' list it reads whatever the directory "
+                              "already holds, and lists the quantities it could not find."),
                      "schema": {"type": "object", "properties": {
-                         "system": {"type": "string"}, "title": {"type": "string"},
-                         "poscar": {"type": "string"},
-                         "extract": {"type": "array", "items": {"type": "object"}},
-                         "compare": {"type": "array", "items": {"type": "object"}},
+                         "system": {"type": "string",
+                                    "description": "case directory, relative to QVASP_WORKROOT "
+                                                   "(required; this is where report.md is written)"},
+                         "title": {"type": "string"},
+                         "poscar": {"type": "string",
+                                    "description": "structure file name inside the case "
+                                                   "(default POSCAR)"},
+                         "auto": {"type": "boolean",
+                                  "description": "scan the directory for known outputs even when "
+                                                 "'extract' is given (default: on when 'extract' "
+                                                 "is empty)"},
+                         "extract": {"type": "array", "items": {"type": "object"},
+                                     "description": "explicit values: "
+                                                    '[{"file": "02-band/EIGENVAL", '
+                                                    '"kind": "band_gap"}]'},
+                         "compare": {"type": "array", "items": {"type": "object"},
+                                     "description": "reference comparisons: "
+                                                    '[{"property": "band_gap", "value": 4.12, '
+                                                    '"unit": "eV", "formula": "C"}]'},
                          "notes": {"type": "array", "items": {"type": "string"}}}}},
     "diagnose_log": {"fn": tool_diagnose_log,
                      "desc": ("Explain a failed VASP/qvasp run: matched error signatures with fixes. "

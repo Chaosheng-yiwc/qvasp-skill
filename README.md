@@ -35,7 +35,7 @@ The program itself is archived at [doi:10.17632/2v4m39dt3n.1](https://doi.org/10
 | MCP | `structure_check` | Symmetry + geometry sanity of a POSCAR (spglib space group, nearest neighbours, overlap/impossible-distance findings) |
 | MCP | `result_extract` / `result_compare` | Pull numbers from OUTCAR/EIGENVAL/DOSCAR/… and compare against reference or literature values |
 | MCP | `reference_lookup` / `literature_record` | Verified reference values for known materials (Raman modes, band gaps, …) |
-| MCP | `report_build` | Assemble a per-calculation report from the recorded analysis |
+| MCP | `report_build` | One call on a case directory → `report.md`: provenance, structure check, every value with the file it came from, comparison, verdict |
 | MCP | `diagnose_log` | Explain a failed or non-converged run: matched signature, cause, fix |
 
 Standard procedures + gates + independent cross-checks make results reproducible and

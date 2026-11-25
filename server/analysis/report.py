@@ -4,6 +4,7 @@ The report never states a literature value that is not in references.json or in 
 per-case refs.json: everything else is printed as "unverified".
 """
 import json
+import os
 import time
 from pathlib import Path
 
@@ -16,7 +17,7 @@ def _table(rows, header):
 
 
 def build(system_dir, title=None, workflow=None, structure=None, extracted=None,
-          comparisons=None, notes=None):
+          comparisons=None, notes=None, missing=None):
     """Assemble the markdown report and write it to <system_dir>/report.md."""
     d = Path(system_dir)
     d.mkdir(parents=True, exist_ok=True)
@@ -84,15 +85,28 @@ def build(system_dir, title=None, workflow=None, structure=None, extracted=None,
     if extracted:
         rows = []
         for item in extracted:
+            src = item.get("source") or ""
+            if src:
+                # Relative to the case directory, so 01-scf/EIGENVAL and
+                # 03-post/band.dat stay distinguishable in the table.
+                try:
+                    src = os.path.relpath(src, str(d))
+                except ValueError:
+                    src = src.rsplit("\\", 1)[-1].rsplit("/", 1)[-1]
             if item.get("unsupported"):
-                rows.append([item.get("kind"), "unsupported", item.get("unsupported"), ""])
+                rows.append([item.get("kind"), "unsupported", item.get("unsupported"), "", src])
                 continue
             for k, v in (item.get("values") or {}).items():
                 rows.append([item.get("kind"), k, v,
-                             (item.get("units") or {}).get(k, "")])
-        lines.append(_table(rows, ["quantity", "field", "value", "unit"]))
+                             (item.get("units") or {}).get(k, ""), src])
+        lines.append(_table(rows, ["quantity", "field", "value", "unit", "file"]))
     else:
         lines.append("- no values extracted.")
+    if missing:
+        lines.append("")
+        lines.append("Quantity not found in this directory (looked for):")
+        for kind, names in missing.items():
+            lines.append(f"- `{kind}`: {', '.join(f'`{n}`' for n in names)}")
     lines.append("")
 
     # ---- 4 comparison

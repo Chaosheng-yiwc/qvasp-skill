@@ -402,3 +402,51 @@ def extract(kind, path):
     if kind in PARSERS:
         return PARSERS[kind](path)
     return _unsupported(kind, path, f"no parser for {kind}; known: {sorted(PARSERS)}")
+
+
+# ---------------------------------------------------------------- discovery --
+# Where a quantity normally lives, in the order worth trying.  Used when the
+# caller says "this directory" instead of naming a file: guessing the kind from
+# the filename is what a model does badly and expensively, so do it here once.
+CANDIDATES = {
+    "band_gap": ("EIGENVAL", "band.dat", "Band.dat"),
+    "dos_at_ef": ("DOSCAR", "DOS0.dat", "dos.dat"),
+    "phonon_min": ("PhononBAND.dat", "phonon.dat"),
+    "mae": ("MAE.dat", "mae.dat"),
+    "thermo": ("thermo.dat", "Thermo.dat"),
+    "rdf_first_peak": ("rdf.dat", "RDF.dat"),
+}
+
+
+def discover(system_dir):
+    """Parse every quantity that can be found in a directory.
+
+    Returns (found, missing): ``found`` is a list of parser results (including
+    the ``unsupported`` ones, so the caller can see what was rejected and why),
+    ``missing`` maps a kind to the file names that were looked for.
+
+    Sub-directories are searched **newest-looking stage first** (reverse name
+    order), because a workflow keeps an EIGENVAL in every stage: 00-relax has one
+    from the relaxation on its own coarse mesh, 02-band has the one on the band
+    path.  Taking the first alphabetically silently reported the relaxation's
+    numbers, so the order is reversed and only one level is walked.
+    """
+    root = Path(system_dir)
+    found, missing = [], {}
+    subs = [p for p in sorted(root.iterdir(), reverse=True)
+            if p.is_dir() and not p.name.startswith(".")]
+    for kind, names in CANDIDATES.items():
+        hit = None
+        for sub in [root] + subs:
+            for name in names:
+                cand = sub / name
+                if cand.is_file() and cand.stat().st_size > 0:
+                    hit = cand
+                    break
+            if hit:
+                break
+        if hit is None:
+            missing[kind] = list(names)
+            continue
+        found.append(extract(kind, str(hit)))
+    return found, missing

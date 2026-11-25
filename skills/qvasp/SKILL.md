@@ -1,5 +1,5 @@
 ---
-x-version: 5
+x-version: 7
 name: qvasp
 description: Use when a task involves qvasp or VASP input preparation and post-processing — INCAR/KPOINTS/POTCAR templates, structure editing (supercell, surface, moiré, defects), band/DOS/charge/phonon/optical/magnetic/thermo post-processing, MD analysis, fixing imaginary frequencies, or diagnosing a VASP crash / non-converged run. Provides the exact 88-command reference, the standard workflows, the known pitfalls, and a failure-signature table so commands, flags and error fixes are never guessed.
 whenToUse: The user mentions qvasp, VASP post-processing (band/DOS/POTCAR/KPOINTS), phonons, Bader charges, work function, optical/IR/Raman spectra, MD trajectory analysis, a VASP error message or a job that failed to converge, or asks to compute/verify something with VASP on a cluster.
@@ -67,7 +67,7 @@ record what was run.
 | pull a number out of an output | `result_extract` (`band_gap`, `dos_at_ef`, `phonon_min`, `mae`, `thermo`, `rdf_first_peak`) |
 | is that number right | `result_compare` + `reference_lookup` — `consistent` / `systematic` / `discrepant` / `unverified` |
 | cite a value you found | `literature_record` (refuses an entry without a DOI or URL) |
-| write the report | `report_build` → `report.md` |
+| write the report | `report_build` with `system=<case dir>` → `report.md` there; it reads the last stage's files itself and names the file behind every number |
 | the job crashed or never converged | `diagnose_log` — matches the log against a table of VASP/qvasp failure signatures and returns the cause plus the fix |
 
 `workflow_run` is resumable and returns `{"waiting": true}` while a job is queued. Call it

@@ -63,6 +63,20 @@ reference/          references.json (literature values used by result_compare)
   convergence verdict would be a statement about a run that was never read.
 - Every tool guards its required arguments before touching them; a call with `{}` must
   return a readable hint, never a raw `KeyError` (models omit arguments routinely).
+- `report_build` requires `system` and refuses an empty, missing or contentless
+  directory. It must not default to the workroot root: `report.build()` writes
+  `report.md` **into the directory it is given**, so a silent default left a
+  `report.md` one level above every case, describing nothing. It also validates
+  each `extract` item (`file` + `kind`) and each `compare` item (`property` +
+  `value`) before running anything.
+- `parsers.discover()` walks sub-directories in **reverse name order**, so the
+  last stage wins. Every workflow stage keeps an `EIGENVAL`: `00-relax` has the
+  one from the relaxation on its own coarse mesh, `02-band`/`03-post` have the
+  one on the band path. Walking forwards silently reported the relaxation's
+  numbers (4.1241 eV, 145 k-points) as the band gap; walking backwards gives
+  4.1199 eV over 210 k-points, which is the value the independent check agrees
+  with. The report prints the relative path each value came from for the same
+  reason: a number without its stage is not reproducible.
 - `aux_run` returns the tool's own output verbatim and interprets nothing. When a
   backend is missing the answer is `null` from `aux_list` and a plain error from
   `aux_run`, so a machine without the optional backend is not a broken install.
