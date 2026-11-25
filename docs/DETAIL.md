@@ -106,6 +106,9 @@ in the skill catalog and the `mcp__qvasp__*` tools appear with it.
 Nothing in the patch is machine-specific: the python interpreter and the path to
 `server/qvasp_mcp.py` are computed at boot from the package location, which is why the
 MCP entry is created from `apply()` instead of being written into `cordis.patch.yml`.
+The interpreter search is `QVASP_PYTHON` → `python`/`python3` on PATH → the usual
+conda and system install directories, because python is often installed on a machine
+without being reachable from the PATH a GUI application inherits.
 
 ## Scope and limits
 

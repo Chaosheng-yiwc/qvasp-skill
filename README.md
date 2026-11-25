@@ -67,8 +67,10 @@ On startup the bundle:
 1. syncs the `qvasp` skill into your skill library (`~/.agents/skills/qvasp`,
    refreshed on a version bump or when the packaged files change — your own edits
    are kept);
-2. mounts the MCP server (`mcp__qvasp__*` tools) using a python found on PATH
-   (`python3`/`python`, or set `QVASP_PYTHON` explicitly).
+2. mounts the MCP server (`mcp__qvasp__*` tools) using python: `QVASP_PYTHON` if
+   set, else `python`/`python3` on PATH, else a common install location
+   (`~/anaconda3`, `~/miniconda3`, `C:\ProgramData\anaconda3`, `/usr/bin`, …) —
+   python is often installed without being on the PATH the app inherits.
 
 ## Configuring the MCP server
 
@@ -82,7 +84,7 @@ variables (read by `server/qvasp_mcp.py`):
 | `QVASP_SCHEDULER` | `pbs` / `slurm` / `none` | auto |
 
 If no python is found at boot the MCP tools are skipped with a warning and the
-skill still works (set `QVASP_PYTHON` and restart the session).
+skill still works (set `QVASP_PYTHON` to the interpreter and restart the session).
 
 ## Local development
 

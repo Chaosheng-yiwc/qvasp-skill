@@ -2,9 +2,10 @@
  * qvasp-skill — DeepSeek Harness bundle providing:
  *   1. the `qvasp` skill (synced to the user's skill library at startup,
  *      x-version gated so user edits survive plugin upgrades);
- *   2. the `qvasp` MCP server (stdio, 14 tools: qvasp_run, workflow_*,
+ *   2. the `qvasp` MCP server (stdio, 17 tools: qvasp_run, workflow_*,
  *      structure_check, result_*, reference_lookup, literature_record,
- *      report_build) mounted dynamically with package-resolved paths.
+ *      report_build, diagnose_log, aux_*), mounted dynamically with
+ *      package-resolved paths.
  *
  * Pure plugin: only public seams (`tools` via the nested MCP entry), zero
  * DSH core changes, zero runtime dependencies.
@@ -37,6 +38,22 @@ const BUILTIN_SKILLS = ['qvasp']
 const DEFAULT_SKILL_DIR = join(homedir(), '.agents', 'skills')
 
 const MCP_ENTRY_ID = 'qvasp-mcp'
+
+/**
+ * Places a python is commonly installed to but not necessarily on the PATH the
+ * host process inherited. Checked after `python`/`python3` on PATH.
+ */
+const COMMON_PYTHON_DIRS = [
+  join(homedir(), 'anaconda3'),
+  join(homedir(), 'miniconda3'),
+  join(homedir(), 'miniforge3'),
+  join(homedir(), 'AppData', 'Local', 'Programs', 'Python'),
+  'C:\\ProgramData\\anaconda3',
+  'C:\\ProgramData\\miniconda3',
+  '/opt/homebrew/bin',
+  '/usr/local/bin',
+  '/usr/bin',
+]
 
 /** Read `x-version` from a SKILL.md frontmatter; CRLF tolerant; default 0. */
 function skillVersion(text) {
@@ -121,6 +138,13 @@ export function mcpEntryConfig(config = {}) {
   if (process.env.QVASP_PYTHON) candidates.push(process.env.QVASP_PYTHON)
   const names = platform() === 'win32' ? ['python', 'python3'] : ['python3', 'python']
   candidates.push(...names)
+  // Python is frequently installed but absent from the PATH the host inherits
+  // (conda on Windows, /usr/bin on macOS, Homebrew, the python.org launcher).
+  // Without these, a machine that can run the server still gets no MCP tools.
+  for (const dir of COMMON_PYTHON_DIRS) {
+    const exe = platform() === 'win32' ? 'python.exe' : 'python3'
+    candidates.push(join(dir, exe))
+  }
   let python = null
   for (const cmd of candidates) {
     const r = spawnSync(cmd, ['--version'], { encoding: 'utf8', timeout: 8000 })
