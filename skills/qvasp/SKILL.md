@@ -1,8 +1,8 @@
 ---
-x-version: 1
+x-version: 2
 name: qvasp
-description: Use when a task involves qvasp or VASP input preparation and post-processing — INCAR/KPOINTS/POTCAR templates, structure editing (supercell, surface, moiré, defects), band/DOS/charge/phonon/optical/magnetic/thermo post-processing, MD analysis, or fixing imaginary frequencies. Provides the exact 88-command reference, the standard workflows, and the known pitfalls so commands and flags are never guessed.
-whenToUse: The user mentions qvasp, VASP post-processing (band/DOS/POTCAR/KPOINTS), phonons, Bader charges, work function, optical/IR/Raman spectra, MD trajectory analysis, or asks to compute/verify something with VASP on a cluster.
+description: Use when a task involves qvasp or VASP input preparation and post-processing — INCAR/KPOINTS/POTCAR templates, structure editing (supercell, surface, moiré, defects), band/DOS/charge/phonon/optical/magnetic/thermo post-processing, MD analysis, fixing imaginary frequencies, or diagnosing a VASP crash / non-converged run. Provides the exact 88-command reference, the standard workflows, the known pitfalls, and a failure-signature table so commands, flags and error fixes are never guessed.
+whenToUse: The user mentions qvasp, VASP post-processing (band/DOS/POTCAR/KPOINTS), phonons, Bader charges, work function, optical/IR/Raman spectra, MD trajectory analysis, a VASP error message or a job that failed to converge, or asks to compute/verify something with VASP on a cluster.
 ---
 
 # qvasp
@@ -11,6 +11,12 @@ whenToUse: The user mentions qvasp, VASP post-processing (band/DOS/POTCAR/KPOINT
 data from VASP outputs, and converts between structure formats. It has 88 commands listed by `qvasp -h`.
 Never invent a flag: look it up in `references/commands.md` (generated from `qvasp -h`)
 or ask `qvasp -h`.
+
+Implemented and maintained by **Wencai Yi**, Qufu Normal University. Cite it as:
+
+> W. Yi, G. Tang, X. Chen, B. Yang, X. Liu, "qvasp: A flexible toolkit for VASP users in
+> materials simulations", *Comput. Phys. Commun.* **257**, 107535 (2020),
+> [doi:10.1016/j.cpc.2020.107535](https://doi.org/10.1016/j.cpc.2020.107535)
 
 ## Rules
 
@@ -62,6 +68,8 @@ record what was run.
 | is that number right | `result_compare` + `reference_lookup` — `consistent` / `systematic` / `discrepant` / `unverified` |
 | cite a value you found | `literature_record` (refuses an entry without a DOI or URL) |
 | write the report | `report_build` → `report.md` |
+| the job crashed or never converged | `diagnose_log` — matches the log against a table of VASP/qvasp failure signatures and returns the cause plus the fix |
+| cross-check with another toolkit | `aux_run` / `aux_list` (VASPKIT, p4vasp, Bader, phonopy when installed) |
 
 `workflow_run` is resumable and returns `{"waiting": true}` while a job is queued. Call it
 again (or `workflow_resume`) after the job ends; it evaluates the stage gate then.
@@ -73,11 +81,28 @@ decides when it is finished.
 A value that comes back `unverified` has no sourced reference behind it. Never present it
 as agreeing with experiment — report it as this calculation's own result.
 
+## When a VASP job fails
+
+Read the tail of `vasp.log` (not the first warning you see), then check it against
+`references/errors.md` — or call `diagnose_log`, which matches the same table and returns
+the cause and the fix. The two facts that decide most cases:
+
+- A job that exits 0 **without** `reached required accuracy` (relaxation) or without
+  `aborting loop because EDIFF is reached` (static) has not converged.
+- For a relaxation that ran out of `NSW`, the criterion to loosen is `EDIFFG` (force),
+  not `EDIFF` (energy).
+
+Change one thing at a time and write down what you changed.
+
 ## Where the details are
 
 - `references/commands.md` — all 88 commands with arguments, required inputs and outputs.
 - `references/workflows.md` — end-to-end recipes (relax→band, phonon→thermo, optics, freqfix).
 - `references/pitfalls.md` — verified caveats (energy zero points, line-shape defaults, ASR, etc.).
+- `references/errors.md` — VASP/qvasp failure signatures: what to grep for, what it means, what to do.
+- `references/ecosystem.md` — the public VASP skill/tool landscape (VASPKIT, p4vasp, phonopy,
+  LOBSTER, and the Nankai AICC skill collection), with licences, for cross-checking and for
+  knowing what else exists.
 
 ## Environment
 

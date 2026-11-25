@@ -1,9 +1,7 @@
 {
   "meta": {
     "title": "qvasp 工具包",
-    "description": "把 qvasp 的 88 条命令、VASP 工作流与已验证的坑点做成技能，agent 不再猜参数。",
+    "description": "把 qvasp 的 88 条命令、VASP 工作流、已验证的坑，以及 VASP 常见报错对照表做成技能，让 agent 不再猜参数、不再瞎试修法。作者：曲阜师范大学 易文才。",
     "detail": "docs/DETAIL.md"
   }
 }
-
-

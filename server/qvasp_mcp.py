@@ -17,6 +17,14 @@ Tools:
   workflow_run     execute the next ready stage(s); submits VASP jobs
   workflow_status  stage/job state of a workflow directory
   workflow_resume  continue a workflow whose job has finished
+  workflow_check   lint a template (prototypes, commands, gates)
+  structure_check  symmetry / geometry sanity of a POSCAR
+  result_extract   parse a VASP output into typed values
+  result_compare   classify a computed value against sourced references
+  reference_lookup / literature_record   curated and user-recorded references
+  report_build     assemble report.md from the recorded analysis
+  diagnose_log     explain a failed run from its logs (signature table)
+  aux_list / aux_run   optional bridges to vaspkit, p4vasp, bader, phonopy
 
 Safety: every command is validated against the `qvasp -h` command list and executed
 with an argv list (never a shell); every cwd must resolve under QVASP_WORKROOT.
@@ -251,7 +259,10 @@ def validate_template(tpl):
 def tool_check(args):
     name = args.get("workflow")
     ids = [name] if name else sorted(p.stem for p in TEMPLATE_DIR.glob("*.json"))
-    return {"checked": ids, "results": [validate_template(load_template(i)) for i in ids]}
+    results = [validate_template(load_template(i)) for i in ids]
+    return {"checked": ids, "results": results,
+            "ok": all(r.get("ok") for r in results),
+            "problems": [p for r in results for p in (r.get("problems") or [])]}
 
 
 def plan(wf_id, system, strategy=None):
@@ -794,6 +805,179 @@ def tool_report_build(args):
                         notes=args.get("notes"))
 
 
+# -------------------------------------------------------------- diagnosis --
+ERRORS_PATH = Path(__file__).resolve().parent / "errors.json"
+
+# Files worth scanning, in the order a human would read them.
+DIAG_FILES = ("vasp.log", "OUTCAR", "OSZICAR", "run.log", "stdout.log", "slurm.out")
+
+_CONVERGED = (
+    ("reached required accuracy", "relaxation converged (forces below EDIFFG)"),
+    ("aborting loop because EDIFF is reached", "electronic loop converged (EDIFF reached)"),
+    ("General timing and accounting", "VASP reached its normal end-of-run banner"),
+)
+
+
+def _error_table():
+    """Load the machine-readable failure signatures (server/errors.json)."""
+    try:
+        return json.loads(ERRORS_PATH.read_text(encoding="utf-8")).get("entries", [])
+    except (OSError, ValueError):
+        return []
+
+
+def _scan(text, entries):
+    """Match every signature against the text; report the first matching line."""
+    hits = []
+    for entry in entries:
+        try:
+            m = re.search(entry["pattern"], text, re.IGNORECASE)
+        except re.error:
+            continue
+        if not m:
+            continue
+        start = text.rfind("\n", 0, m.start()) + 1
+        end = text.find("\n", m.end())
+        line = text[start:end if end != -1 else len(text)].strip()
+        hits.append({
+            "id": entry.get("id"),
+            "severity": entry.get("severity"),
+            "category": entry.get("category"),
+            "matched": line[:200],
+            "meaning": entry.get("meaning"),
+            "fix": entry.get("fix"),
+            **({"qvasp": entry["qvasp"]} if entry.get("qvasp") else {}),
+        })
+    order = {"fatal": 0, "warning-then-fatal": 1, "warning": 2}
+    hits.sort(key=lambda h: order.get(h["severity"], 3))
+    return hits
+
+
+def _convergence(text):
+    seen = [msg for marker, msg in _CONVERGED if marker in text]
+    steps = len(re.findall(r"^\s*(?:DAV|RMM|CG|DIA):\s*\d+", text, re.MULTILINE))
+    ionic = len(re.findall(r"^\s*\d+\s+F=", text, re.MULTILINE))
+    return {"markers": seen, "electronic_steps": steps, "ionic_steps": ionic,
+            "converged": bool(seen)}
+
+
+def tool_diagnose_log(args):
+    """Explain a failed (or suspicious) VASP/qvasp run from its log files."""
+    cwd = safe_cwd(args.get("cwd", "."))
+    named = args.get("files") or list(DIAG_FILES)
+    texts, scanned, missing = {}, [], []
+    for name in named:
+        p = cwd / name
+        if p.is_file():
+            texts[name] = p.read_text(errors="replace")
+            scanned.append(name)
+        else:
+            missing.append(name)
+    if not texts:
+        return err(f"no log file found in {cwd} (looked for {', '.join(named)})")
+    merged = "\n".join(texts.values())
+    entries = _error_table()
+    hits = _scan(merged, entries)
+    conv = _convergence(merged)
+    verdict = ("failed" if any(h["severity"] == "fatal" for h in hits)
+               else "converged" if conv["converged"] else "no-marker")
+    out = {"cwd": str(cwd), "files": scanned, "missing": missing,
+           "verdict": verdict, "convergence": conv,
+           "findings": hits, "table_entries": len(entries)}
+    if args.get("text"):
+        extra = _scan(str(args["text"]), entries)
+        out["from_text"] = extra
+    return out
+
+
+# ------------------------------------------------------------- aux backends --
+# qvasp is the reference implementation here; these bridges exist so the agent
+# can cross-check a number with the tool a given user already has installed.
+AUX_CANDIDATES = {
+    "vaspkit": ("vaspkit", ["/public/software/vaspkit.1.12/bin/vaspkit",
+                            "/public/software/vaspkit/bin/vaspkit",
+                            "/opt/vaspkit/bin/vaspkit"]),
+    "p4vasp": ("p4vasp", ["/usr/local/bin/p4vasp", "/usr/bin/p4vasp"]),
+    "bader": ("bader", ["USERDefine/TooLs/bader.x", "USERDefine/TooLs/bader"]),
+    "phonopy": ("phonopy", ["~/.local/bin/phonopy"]),
+    "phonopy-init": ("phonopy-init", ["~/.local/bin/phonopy-init"]),
+}
+
+
+_aux_cache = {}
+
+
+def _aux_fallbacks(spec):
+    """Expand the fallback list: ~ home, and paths relative to the qvasp install.
+
+    qvasp ships its companion binaries under <qvasp-dir>/USERDefine/TooLs, so a
+    relative entry is resolved next to the configured QVASP_BIN as well as in the
+    current directory. Nothing here is required — a miss just means "not installed"."""
+    out = []
+    qdir = None
+    binpath = shutil.which(QVASP_BIN) or QVASP_BIN
+    if binpath and os.path.sep in binpath:
+        qdir = Path(binpath).resolve().parent
+    for cand in spec:
+        if cand.startswith("~"):
+            out.append(os.path.expanduser(cand))
+        elif os.path.isabs(cand):
+            out.append(cand)
+        else:
+            if qdir:
+                out.append(str(qdir / cand))
+            out.append(cand)
+    return out
+
+
+def aux_tool(name):
+    """Resolve an auxiliary VASP tool by name, falling back to known paths.
+
+    Same discipline as scheduler_tool(): the cache is keyed by *name* so that
+    asking for a second tool cannot return the first one's path."""
+    if name in _aux_cache:
+        return _aux_cache[name]
+    exe, fallbacks = AUX_CANDIDATES.get(name, (name, []))
+    found = shutil.which(exe)
+    if not found:
+        for cand in _aux_fallbacks(fallbacks):
+            if Path(cand).is_file() and os.access(cand, os.X_OK):
+                found = cand
+                break
+    _aux_cache[name] = found
+    return found
+
+
+def tool_aux_run(args):
+    """Run a companion VASP tool (vaspkit, p4vasp, bader, phonopy) in a directory."""
+    name = str(args.get("tool", "")).strip()
+    if name not in AUX_CANDIDATES:
+        return err(f"aux_run needs 'tool' one of {sorted(AUX_CANDIDATES)}")
+    exe = aux_tool(name)
+    if not exe:
+        return err(f"{name} is not installed here; looked for {name} on PATH and in "
+                   f"{AUX_CANDIDATES[name][1]}")
+    cwd = safe_cwd(args.get("cwd", "."))
+    argv = [exe] + [str(a) for a in (args.get("args") or [])]
+    before = {p.name for p in cwd.iterdir() if p.is_file()}
+    stdin = "\n".join(args.get("stdin", [])) + ("\n" if args.get("stdin") else "")
+    try:
+        proc = subprocess.run(argv, cwd=str(cwd), input=stdin, capture_output=True,
+                              text=True, timeout=args.get("timeout_s", 300))
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return err(f"{name} could not be run: {exc}")
+    out = (proc.stdout or "") + (proc.stderr or "")
+    after = {p.name for p in cwd.iterdir() if p.is_file()}
+    return {"tool": name, "exe": exe, "exit_code": proc.returncode,
+            "cwd": str(cwd), "new_files": sorted(after - before),
+            "stdout_tail": "\n".join(out.splitlines()[-50:])}
+
+
+def tool_aux_list(args):
+    """Report which companion tools are available on this machine."""
+    return {"backends": {n: aux_tool(n) for n in sorted(AUX_CANDIDATES)}}
+
+
 def err(msg):
     return {"error": msg}
 
@@ -868,6 +1052,23 @@ TOOLS = {
                          "extract": {"type": "array", "items": {"type": "object"}},
                          "compare": {"type": "array", "items": {"type": "object"}},
                          "notes": {"type": "array", "items": {"type": "string"}}}}},
+    "diagnose_log": {"fn": tool_diagnose_log,
+                     "desc": "Explain a failed VASP/qvasp run: matched error signatures with fixes",
+                     "schema": {"type": "object", "properties": {
+                         "cwd": {"type": "string"},
+                         "files": {"type": "array", "items": {"type": "string"}},
+                         "text": {"type": "string"}}}},
+    "aux_list": {"fn": tool_aux_list,
+                 "desc": "Which companion tools (vaspkit, p4vasp, bader, phonopy) are installed",
+                 "schema": {"type": "object", "properties": {}}},
+    "aux_run": {"fn": tool_aux_run,
+                "desc": "Run a companion VASP tool in a directory for an independent cross-check",
+                "schema": {"type": "object", "properties": {
+                    "tool": {"type": "string", "enum": sorted(AUX_CANDIDATES)},
+                    "cwd": {"type": "string"},
+                    "args": {"type": "array", "items": {"type": "string"}},
+                    "stdin": {"type": "array", "items": {"type": "string"}},
+                    "timeout_s": {"type": "number"}}, "required": ["tool"]}},
     "result_parse": {"fn": tool_result_extract,
                      "desc": "Alias of result_extract",
                      "schema": {"type": "object", "properties": {

@@ -1,0 +1,184 @@
+{
+  "schema": 1,
+  "note": "Machine-readable VASP/qvasp failure signatures for the diagnose_log tool. 'pattern' is a Python regex matched case-insensitively against the tail of vasp.log / OUTCAR / OSZICAR / run.log. Keep patterns specific: a generic word like 'error' matches harmless warnings.",
+  "entries": [
+    {
+      "id": "zbrent",
+      "pattern": "ZBRENT:\\s*fatal error",
+      "severity": "fatal",
+      "category": "relaxation",
+      "meaning": "The ionic line search bracketed a step it could not resolve. Usual causes: a soft mode, an over-large POTIM, or a structure that is not the one intended.",
+      "fix": "cp CONTCAR POSCAR, set IBRION = 1, POTIM = 0.1, EDIFF = 1E-6 and restart. If it recurs, relax with ISIF = 2 first: the structure is too close to a soft mode for a full cell relaxation.",
+      "qvasp": "qvasp -freqfix (solid mode) can remove the numerical part of a soft mode before retrying."
+    },
+    {
+      "id": "eddav",
+      "pattern": "Error EDDDAV|Call to ZHEGV failed",
+      "severity": "fatal",
+      "category": "scf",
+      "meaning": "The blocked-Davidson solver produced a numerically unusable subspace. Common with too few bands per core or an aggressive mixer.",
+      "fix": "Delete WAVECAR, set ALGO = Normal (not Fast), reduce NCORE/NSIM, retry."
+    },
+    {
+      "id": "subspace-hermitian",
+      "pattern": "Sub-Space-Matrix is not hermitian",
+      "severity": "warning-then-fatal",
+      "category": "structure",
+      "meaning": "Almost always two atoms sitting on top of each other, or a lattice so distorted that the plane-wave basis is inconsistent.",
+      "fix": "Check the smallest interatomic distance first (structure_check reports overlaps). Only then try ALGO = All with a smaller AMIX."
+    },
+    {
+      "id": "brmix",
+      "pattern": "BRMIX:\\s*very serious problems",
+      "severity": "fatal",
+      "category": "scf",
+      "meaning": "Charge mixing diverged.",
+      "fix": "AMIX = 0.2, BMIX = 0.0001; for magnetic systems also AMIX_MAG = 0.8, BMIX_MAG = 0.0001. Verify NELECT equals the POTCAR ZVAL sum."
+    },
+    {
+      "id": "chgcar-grid",
+      "pattern": "charge density could not be read from file CHGCAR|dimensions on CHGCAR file are different",
+      "severity": "fatal",
+      "category": "workflow",
+      "meaning": "The CHGCAR was written on a different plane-wave cutoff than the run reading it, so the FFT grids differ. The usual case is a SCF run at ENCUT = 500 followed by qvasp's -band template, which defaults to ENCUT = 400.",
+      "fix": "Set the same ENCUT explicitly in the writing and the reading INCAR (500 for both in the templates shipped here).",
+      "qvasp": "In a qvasp MCP workflow the nscf prototype carries ENCUT = 500 for exactly this reason."
+    },
+    {
+      "id": "tetrahedron-fails",
+      "pattern": "Tetrahedron method fails",
+      "severity": "warning",
+      "category": "smearing",
+      "meaning": "ISMEAR = -5 was used in a run where the k-mesh moves (relaxation, MD), so the tetrahedron weights are ill-defined.",
+      "fix": "Use ISMEAR = 0 with a small SIGMA while the geometry changes; keep -5 for the final static run and for DOS."
+    },
+    {
+      "id": "too-few-bands",
+      "pattern": "TOO FEW BANDS",
+      "severity": "fatal",
+      "category": "bands",
+      "meaning": "NBANDS is too small for the requested eigenvalue count.",
+      "fix": "Raise NBANDS to about 1.3-2x the default; with LOPTICS or hybrids, more."
+    },
+    {
+      "id": "sgron",
+      "pattern": "internal error in subroutine (SGRCON|IBZKPT|PRICEL)",
+      "severity": "fatal",
+      "category": "symmetry",
+      "meaning": "The symmetry finder was handed a structure that is only approximately symmetric.",
+      "fix": "SYMPREC = 1E-4; if it persists, ISYM = 0 and accept the cost."
+    },
+    {
+      "id": "rotation-inverse",
+      "pattern": "inverse of rotation matrix was not found",
+      "severity": "fatal",
+      "category": "symmetry",
+      "meaning": "A symmetry rotation could not be inverted at the working precision.",
+      "fix": "ISYM = 0 for that run."
+    },
+    {
+      "id": "zpotrf",
+      "pattern": "Routine ZPOTRF failed|ZPOTRF",
+      "severity": "fatal",
+      "category": "structure",
+      "meaning": "Overlapping atoms, often produced by an over-large POTIM on a stiff mode.",
+      "fix": "Inspect the last frames of XDATCAR, rebuild POSCAR from a good frame, restart with POTIM = 0.1-0.2."
+    },
+    {
+      "id": "mpirun-missing",
+      "pattern": "mpirun: command not found",
+      "severity": "fatal",
+      "category": "environment",
+      "meaning": "The job script did not source the cluster MPI environment on the compute node.",
+      "fix": "Source the cluster Intel/MPI environment inside the job script before mpirun."
+    },
+    {
+      "id": "vasp-std-execvp",
+      "pattern": "execvp error on file vasp_std|vasp_std: No such file or directory",
+      "severity": "fatal",
+      "category": "environment",
+      "meaning": "The binary is named without an absolute path and the compute node does not inherit the login PATH.",
+      "fix": "Use an absolute path in the job script, e.g. /public/software/vasp/vasp.6.5.1/bin/vasp_std."
+    },
+    {
+      "id": "oom",
+      "pattern": "KILLED BY SIGNAL|oom-kill|Out of memory",
+      "severity": "fatal",
+      "category": "resources",
+      "meaning": "Out of memory. Cost scales with NBANDS x NPW x N_kpoints and rises sharply with LOPTICS.",
+      "fix": "Fewer ranks per node, lower KPAR, or NCORE equal to the cores per node."
+    },
+    {
+      "id": "eof-poscar",
+      "pattern": "forrtl: severe \\(24\\): end-of-file during read",
+      "severity": "fatal",
+      "category": "input",
+      "meaning": "A fixed-format read ran past end of file, most often a POSCAR whose coordinate block is shorter than the header promises.",
+      "fix": "Count the atoms: the header says N and the coordinate block must have N lines. qvasp 3.01 fixed a reader that consumed one extra line when the mode line read Cartesian."
+    },
+    {
+      "id": "qvasp-no-contcar",
+      "pattern": "I can't find CONTCAR or POSCAR file here|I can't find CONTCAR file here",
+      "severity": "fatal",
+      "category": "qvasp",
+      "meaning": "-bandd / -3dband need the lattice.",
+      "fix": "Run in a directory that has CONTCAR or POSCAR. qvasp 3.01 added the POSCAR fallback; earlier versions demanded CONTCAR."
+    },
+    {
+      "id": "qvasp-dim",
+      "pattern": "ERROR: invalid dimensionality",
+      "severity": "fatal",
+      "category": "qvasp",
+      "meaning": "-kline / -khse / -kphonon ask for the dimensionality interactively and read EOF.",
+      "fix": "Answer the prompt (1, 2 or 3). Through the MCP server pass it as the first stdin line."
+    },
+    {
+      "id": "qvasp-phonon-token",
+      "pattern": "POSCAR not found \\(.+\\); writing commented v4 templates",
+      "severity": "warning",
+      "category": "qvasp",
+      "meaning": "-phonon takes only named options (--dim, --vac, --chain, --n, --out); any other token is treated as a POSCAR filename.",
+      "fix": "qvasp -phonon --dim 2 2 2, not qvasp -phonon 2 2 2."
+    },
+    {
+      "id": "qvasp-poscar-missing",
+      "pattern": "\\[qvasp ERROR\\] POSCAR not found",
+      "severity": "fatal",
+      "category": "qvasp",
+      "meaning": "The command needs the structure to choose a template or a stability criterion.",
+      "fix": "Keep POSCAR in the working directory; in a staged workflow copy the upstream CONTCAR to POSCAR."
+    },
+    {
+      "id": "phonopy-disp-missing",
+      "pattern": "phonopy_disp\\.yaml could not be found",
+      "severity": "fatal",
+      "category": "phonon",
+      "meaning": "The phonon run was continued in a directory that never had the displacement file.",
+      "fix": "Copy phonopy.yaml, phonopy_disp.yaml and FORCE_SETS from the directory that ran the displacements. -phonond deliberately never re-initialises: a fresh phonopy_disp.yaml may describe different displacements or a different supercell and the forces would be silently mis-assigned."
+    },
+    {
+      "id": "force-sets-missing",
+      "pattern": "FORCE_SETS missing",
+      "severity": "fatal",
+      "category": "phonon",
+      "meaning": "The forces were never extracted from the displacement runs.",
+      "fix": "phonopy-init -f disp-*/vasprun.xml (phonopy >= 4; the old phonopy -f moved to phonopy-init)."
+    },
+    {
+      "id": "potcar-missing",
+      "pattern": "POTCAR missing at the system root|POTCAR not found",
+      "severity": "fatal",
+      "category": "input",
+      "meaning": "A stage directory has no POTCAR and none was staged from the system root.",
+      "fix": "Put POTCAR at the root of the case directory, or build it with qvasp -pbe/-lda/-pw91 <elements>."
+    },
+    {
+      "id": "outside-workroot",
+      "pattern": "is outside QVASP_WORKROOT",
+      "severity": "fatal",
+      "category": "mcp",
+      "meaning": "The MCP server refuses to touch files outside its sandbox.",
+      "fix": "Pass a path under QVASP_WORKROOT, or raise the root by setting QVASP_WORKROOT."
+    }
+  ]
+}

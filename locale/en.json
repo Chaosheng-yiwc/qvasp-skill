@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "qvasp toolkit",
-    "description": "Ships the qvasp command reference, VASP workflows and verified pitfalls as a skill, so the agent never guesses a flag.",
+    "description": "Ships the qvasp command reference, VASP workflows, verified pitfalls and a VASP failure-signature table as a skill, so the agent never guesses a flag or a fix. By Wencai Yi, Qufu Normal University.",
     "detail": "docs/DETAIL.md"
   }
 }
