@@ -58,4 +58,4 @@ reference/          references.json (literature values used by result_compare)
   is the first one that hit.
 - `aux_run` returns the tool's own output verbatim and interprets nothing. When a
   backend is missing the answer is `null` from `aux_list` and a plain error from
-  `aux_run`, so a machine without VASPKIT is not a broken install.
+  `aux_run`, so a machine without the optional backend is not a broken install.

@@ -18,6 +18,14 @@ the repository and link to it instead of copying.
 | [aimat-lab/agent-skills](https://github.com/aimat-lab/agent-skills) | unspecified | Wide-but-shallow coverage across ASE, VASP, LAMMPS and PyTorch workflows. Useful as a checklist of what an agent might be asked to do; check the licence before reuse. |
 | [bowenphys/dsh-vasp-periodic-table](https://github.com/bowenphys/dsh-vasp-periodic-table) | MIT | A DeepSeek Harness plugin exposing the VASP periodic table (PAW potentials, `ZVAL`, `ENMAX`, `MAGMOM`, POTCAR snippets). Complements `qvasp -pbe/-lda/-pw91` when you need the numeric parameters rather than the POTCAR file. |
 
+## MCP servers and agent tooling for VASP
+
+| project | licence | what it is good for |
+| --- | --- | --- |
+| [NabKh/vasp-mcp](https://github.com/NabKh/vasp-mcp) | MIT | A read-only MCP server that lints VASP inputs before submission and summarises a finished run (convergence, energies, forces, per-spin band gaps, crash causes). Narrower than this pack and read-only, which makes it a good independent second opinion on the diagnosis. |
+| [hkqai/MatClaw](https://github.com/hkqai/MatClaw) | AGPL-3.0 | Tool and skill library for materials agents covering the wider simulation stack. AGPL: read it for ideas, do not copy code into a permissively licensed bundle. |
+| VASPilot ([arXiv:2508.07035](https://arxiv.org/abs/2508.07035)) | paper + code | A CrewAI-based multi-agent layer over an MCP tool server for autonomous VASP runs. Useful as a design reference for how an agent should plan, submit and report a calculation. |
+
 ## How to use this list
 
 - Before inventing a parameter set, check whether one of these projects already

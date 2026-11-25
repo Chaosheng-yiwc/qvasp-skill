@@ -1,5 +1,5 @@
 ---
-x-version: 2
+x-version: 3
 name: qvasp
 description: Use when a task involves qvasp or VASP input preparation and post-processing — INCAR/KPOINTS/POTCAR templates, structure editing (supercell, surface, moiré, defects), band/DOS/charge/phonon/optical/magnetic/thermo post-processing, MD analysis, fixing imaginary frequencies, or diagnosing a VASP crash / non-converged run. Provides the exact 88-command reference, the standard workflows, the known pitfalls, and a failure-signature table so commands, flags and error fixes are never guessed.
 whenToUse: The user mentions qvasp, VASP post-processing (band/DOS/POTCAR/KPOINTS), phonons, Bader charges, work function, optical/IR/Raman spectra, MD trajectory analysis, a VASP error message or a job that failed to converge, or asks to compute/verify something with VASP on a cluster.
@@ -69,7 +69,6 @@ record what was run.
 | cite a value you found | `literature_record` (refuses an entry without a DOI or URL) |
 | write the report | `report_build` → `report.md` |
 | the job crashed or never converged | `diagnose_log` — matches the log against a table of VASP/qvasp failure signatures and returns the cause plus the fix |
-| cross-check with another toolkit | `aux_run` / `aux_list` (VASPKIT, p4vasp, Bader, phonopy when installed) |
 
 `workflow_run` is resumable and returns `{"waiting": true}` while a job is queued. Call it
 again (or `workflow_resume`) after the job ends; it evaluates the stage gate then.
@@ -99,10 +98,10 @@ Change one thing at a time and write down what you changed.
 - `references/commands.md` — all 88 commands with arguments, required inputs and outputs.
 - `references/workflows.md` — end-to-end recipes (relax→band, phonon→thermo, optics, freqfix).
 - `references/pitfalls.md` — verified caveats (energy zero points, line-shape defaults, ASR, etc.).
+- `references/parameters.md` — choosing ENCUT, k-mesh, smearing, functional, +U, dispersion, magnetism, slab/molecule settings, and what to record with every reported number.
 - `references/errors.md` — VASP/qvasp failure signatures: what to grep for, what it means, what to do.
-- `references/ecosystem.md` — the public VASP skill/tool landscape (VASPKIT, p4vasp, phonopy,
-  LOBSTER, and the Nankai AICC skill collection), with licences, for cross-checking and for
-  knowing what else exists.
+- `references/ecosystem.md` — the public VASP agent-skill landscape, with licences, for
+  cross-checking and for knowing what else exists.
 
 ## Environment
 

@@ -24,13 +24,15 @@ users in materials simulations", *Comput. Phys. Commun.* **257**, 107535 (2020),
   energy zero of `-bandd`, the Gaussian default of `-ir`/`-raman`, the `-freqfix` amplitude
   semantics, what the acoustic sum rule can and cannot fix, moiré strain, element names for
   POTCAR, and more.
+- **`references/parameters.md`** — the convergence and model decisions: ENCUT and k-mesh
+  tests, smearing, functional choice (PBE / HSE / +U / dispersion), magnetism, slab and
+  molecule settings, throughput knobs, and the five facts every reported number needs.
 - **`references/errors.md`** — the failure-signature table: what to grep for in `vasp.log`,
   what it means, what to change, plus the triage order and the "finishes but is wrong"
   symptoms. Same table, machine-readable, drives the `diagnose_log` tool.
 - **`references/ecosystem.md`** — the public VASP agent-skill landscape (the Nankai AICC
-  collection, matsci-ai-skills, agent-skills, the DSH VASP periodic-table plugin) and the
-  tools that pair with qvasp (VASPKIT, p4vasp, ASE, pymatgen, phonopy, spglib, LOBSTER, VTST,
-  Bader), with licences, so the agent knows what exists before reinventing it.
+  collection, matsci-ai-skills, agent-skills, the DSH VASP periodic-table plugin), with
+  licences, so the agent knows what exists before reinventing it.
 
 ## The MCP server (`server/`)
 
@@ -56,12 +58,6 @@ records `state="manual"` with the note, and waits for the user to run it and cal
 first, reports the convergence markers and step counts, and returns the cause and the fix
 per finding. It also accepts raw text so a pasted error can be triaged without a file.
 Passing an unrecognised log returns `verdict: "no-marker"` rather than a guess.
-
-**Companion backends.** `aux_list` reports which of VASPKIT, p4vasp, Bader and phonopy are
-installed (PATH first, then the known cluster paths); `aux_run` runs one of them in a
-directory so a number can be cross-checked against a second implementation. These are
-optional: when a tool is absent the answer is `null`, not an error, and qvasp remains the
-reference implementation.
 
 **Analysis.** `structure_check` (lattice, volume, density, spglib symmetry, nearest-neighbour
 distances, unambiguous defect flags — deliberately no coordination number, which is
@@ -102,8 +98,6 @@ MCP entry is created from `apply()` instead of being written into `cordis.patch.
 - `diagnose_log` matches signatures, it does not prove a cause. Two findings at once are
   normal (a bad structure produces the hermitian warning and then the solver abort); fix
   the structurally-certain one first.
-- The companion backends (`aux_run`) are conveniences for cross-checking, not a
-  reimplementation: their output is returned verbatim and no number is interpreted.
 - `references/ecosystem.md` is a survey, not a vendored copy. Several of the projects it
   lists are non-commercial or unlicensed; nothing from them is redistributed here.
 - `band-hse`'s `opt` strategy needs VASP ≥ 6.3 (KPOINTS_OPT). It was driven end to end

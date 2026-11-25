@@ -25,6 +25,7 @@ The program itself is archived at [doi:10.17632/2v4m39dt3n.1](https://doi.org/10
 | Layer | Tool | Purpose |
 | --- | --- | --- |
 | Skill | `qvasp` (skill library) | Exact 88-command reference, 10 workflow recipes, verified pitfalls — never invent a flag |
+| Skill | `references/parameters.md` | Convergence tests and the model decisions (ENCUT, k-mesh, smearing, functional, +U, dispersion, magnetism) |
 | Skill | `references/errors.md` | VASP/qvasp failure signatures: what to grep for, why it happened, what to change |
 | Skill | `references/ecosystem.md` | The public VASP agent-skill landscape and the tools around qvasp, with licences, for cross-checking |
 | MCP | `qvasp_run` | Run a whitelisted qvasp command with optional stdin; returns exit code, new files, stdout tail |
