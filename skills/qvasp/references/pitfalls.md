@@ -69,6 +69,21 @@ you interpret or hand off results.
   primitive cell (fcc, spglib 227 for diamond).
 - `-p2c` names the CIF after the current folder, not `out.cif`.
 
+## Reading numbers out of a file
+
+- Identify the file before trusting a number from it. An EIGENVAL, a `band.dat` and a
+  `DOSCAR` all start with numbers; a parser that only skims columns will happily report a
+  gap read from the wrong one. If a tool answers `unsupported`, the file is the wrong type
+  — do not retry the same call hoping for a number.
+- A gap needs a finished run. A killed job leaves a valid EIGENVAL header and a partial
+  band list; the "gap" computed from it is not small, it is meaningless. Check
+  `nkpts` against the number of k-blocks actually present.
+- Metals: decide with `min(empty) < max(occupied)`, not with fractional occupations.
+  `ISMEAR = 0, SIGMA = 0.2` leaves a 4.12 eV gap with occupations of 0.961, and the
+  reverse mistake (calling an insulator metallic) is just as easy.
+- Phonon frequencies near zero are noise, not soft modes: the three acoustic branches of
+  a stable crystal land at ~1e-5 cm⁻¹. Only `f < -1 cm⁻¹` is worth reporting as imaginary.
+
 ## POTCAR
 
 - `-pbe/-lda/-pw91` take the library element names (`Sr_sv`, `Ti_pv`, `O`, …), not the

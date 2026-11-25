@@ -65,7 +65,8 @@ dsh plugin --profile <your-profile> add github:Chaosheng-yiwc/qvasp-skill
 On startup the bundle:
 
 1. syncs the `qvasp` skill into your skill library (`~/.agents/skills/qvasp`,
-   x-version gated — your edits survive upgrades);
+   refreshed on a version bump or when the packaged files change — your own edits
+   are kept);
 2. mounts the MCP server (`mcp__qvasp__*` tools) using a python found on PATH
    (`python3`/`python`, or set `QVASP_PYTHON` explicitly).
 

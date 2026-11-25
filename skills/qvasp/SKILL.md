@@ -1,5 +1,5 @@
 ---
-x-version: 3
+x-version: 5
 name: qvasp
 description: Use when a task involves qvasp or VASP input preparation and post-processing — INCAR/KPOINTS/POTCAR templates, structure editing (supercell, surface, moiré, defects), band/DOS/charge/phonon/optical/magnetic/thermo post-processing, MD analysis, fixing imaginary frequencies, or diagnosing a VASP crash / non-converged run. Provides the exact 88-command reference, the standard workflows, the known pitfalls, and a failure-signature table so commands, flags and error fixes are never guessed.
 whenToUse: The user mentions qvasp, VASP post-processing (band/DOS/POTCAR/KPOINTS), phonons, Bader charges, work function, optical/IR/Raman spectra, MD trajectory analysis, a VASP error message or a job that failed to converge, or asks to compute/verify something with VASP on a cluster.
@@ -84,7 +84,9 @@ as agreeing with experiment — report it as this calculation's own result.
 
 Read the tail of `vasp.log` (not the first warning you see), then check it against
 `references/errors.md` — or call `diagnose_log`, which matches the same table and returns
-the cause and the fix. The two facts that decide most cases:
+the cause and the fix. Paste the failing line as `text=` when there is no run directory to
+scan; pass `cwd=` as well when there is, and you get the file report too. The two facts
+that decide most cases:
 
 - A job that exits 0 **without** `reached required accuracy` (relaxation) or without
   `aborting loop because EDIFF is reached` (static) has not converged.

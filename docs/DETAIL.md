@@ -56,8 +56,12 @@ records `state="manual"` with the note, and waits for the user to run it and cal
 **Diagnosis.** `diagnose_log` reads the tail of `vasp.log` / `OUTCAR` / `OSZICAR` /
 `run.log`, matches it against `server/errors.json` (22 signatures), sorts fatal findings
 first, reports the convergence markers and step counts, and returns the cause and the fix
-per finding. It also accepts raw text so a pasted error can be triaged without a file.
-Passing an unrecognised log returns `verdict: "no-marker"` rather than a guess.
+per finding. Passing an unrecognised log returns `verdict: "no-marker"` rather than a guess.
+
+`text=` triages a pasted error without any run directory — the usual "VASP died with this
+line, what now" case. That mode reports `verdict: "failed"` / `"warning"` / `"no-match"`
+from the text alone and says so in a `note`, because with no run on disk there is nothing
+to say about convergence. Give both `cwd` and `text` and you get both reports.
 
 **Analysis.** `structure_check` (lattice, volume, density, spglib symmetry, nearest-neighbour
 distances, unambiguous defect flags — deliberately no coordination number, which is
@@ -65,6 +69,14 @@ unreliable in ionic crystals), `result_extract` (band gap, DOS at E_F, phonon mi
 thermodynamics, RDF first peak — returns `unsupported` instead of guessing when a file does
 not parse), `result_compare`, `reference_lookup`, `literature_record`, `report_build`
 (writes a five-section `report.md`).
+
+`result_extract` accepts a file only after proving it is the type the requested value
+needs: an EIGENVAL is recognised by `nbands` rows of `(band, energy, occupation)` in its
+first k-block, a two-column `band.dat` must be >95% two-column lines, and a truncated
+EIGENVAL is refused outright because a killed run leaves a header that still parses. A
+file of the wrong type gets `unsupported` with the expected file named, never a number
+read from the wrong column. Metal detection uses `min(empty) < max(occupied)` rather than
+fractional occupations, since smearing leaves a 4 eV gap with occupations near 0.96.
 
 `result_compare` classifies a computed value as `consistent`, `systematic`, `discrepant` or
 `unverified` against `server/reference/references.json`. Every reference entry must carry a
@@ -75,8 +87,11 @@ refuses an entry without a DOI or URL.
 ## Installation
 
 The bundle is a host plugin: `index.js` syncs the bundled skill into `~/.agents/skills/qvasp`
-(x-version gated, so local edits survive upgrades) and mounts the MCP entry with
-runtime-resolved paths. Install it with the plugin manager or
+and mounts the MCP entry with runtime-resolved paths. The sync overwrites the installed copy
+when `x-version` goes up, and also when the packaged files changed while the version did not
+(a content hash is recorded in `~/.agents/skills/.qvasp.skill-hash`), so a forgotten version
+bump cannot leave stale reference files installed. If you edit the installed copy yourself,
+your edits are kept until the next version bump. Install it with the plugin manager or
 `dsh plugin --profile <profile> add qvasp-skill`, then start a new session; `qvasp` appears
 in the skill catalog and the `mcp__qvasp__*` tools appear with it.
 

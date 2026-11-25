@@ -88,7 +88,10 @@ def tail(path, n=60):
 def run_qvasp(args):
     """Run one qvasp subcommand. Kept apart from tool_workflow_run so that a
     workflow stage can call it without re-entering the workflow runner."""
-    cmd = str(args["command"]).strip()
+    cmd = str(args.get("command") or "").strip()
+    if not cmd:
+        return err("qvasp_run needs 'command', e.g. \"-pbe C H\" or \"-sc 2 2 2\"; "
+                   "see qvasp_help for the 88 subcommands")
     sub = [tok for tok in cmd.split() if tok.startswith("-")]
     if not qvasp_commands():
         return err(f"qvasp binary not available (tried '{QVASP_BIN} -h'); "
@@ -397,7 +400,10 @@ def submit(cwd, template):
 
 
 def tool_plan(args):
-    return plan(args["workflow"], args.get("system", "."), args.get("strategy"))
+    wf = str(args.get("workflow") or "").strip()
+    if not wf:
+        return err("workflow_plan needs 'workflow'; list valid names with workflow_check")
+    return plan(wf, args.get("system", "."), args.get("strategy"))
 
 
 VASP_CMD = os.environ.get("QVASP_VASP_CMD", "vasp_std")
@@ -496,7 +502,10 @@ def job_alive(job_id):
 def tool_workflow_run(args):
     """Advance a workflow by one stage. (Named distinctly from run_qvasp, which
     runs a single qvasp command — a shared name made this call itself.)"""
-    wf = args["workflow"]
+    wf = str(args.get("workflow") or "").strip()
+    if not wf:
+        return err("workflow_run needs 'workflow' and 'system' (the case directory); "
+                   "list valid names with workflow_check")
     root = safe_cwd(args.get("system", "."))
     tpl = load_template(wf)
     st = workflow_state(root) or {"workflow": wf, "system": str(root), "stages": {}}
@@ -735,6 +744,9 @@ def tool_result_compare(args):
     _, _, compare, _ = _analysis()
     if "value" not in args and "computed" in args:
         args = dict(args, value=args["computed"])
+    if not str(args.get("property") or "").strip():
+        return err("result_compare needs 'property' (e.g. \"band_gap\") so the library "
+                   "knows which quantity is being compared")
     if "value" not in args:
         return err("result_compare needs the computed value as 'value' "
                    "(e.g. {\"property\":\"band_gap\",\"value\":1.17,\"unit\":\"eV\"})")
@@ -756,8 +768,12 @@ def tool_result_compare(args):
 
 def tool_reference_lookup(args):
     _, _, compare, _ = _analysis()
-    hits = compare.lookup(args["property"], args.get("formula"), args.get("phase"))
-    return {"property": args["property"], "count": len(hits), "records": hits}
+    prop = str(args.get("property") or "").strip()
+    if not prop:
+        return err("reference_lookup needs 'property' (e.g. \"band_gap\", \"raman\", "
+                   "\"k1\", \"dos_at_ef\") plus optionally 'formula' and 'phase'")
+    hits = compare.lookup(prop, args.get("formula"), args.get("phase"))
+    return {"property": prop, "count": len(hits), "records": hits}
 
 
 def tool_literature_record(args):
@@ -873,20 +889,34 @@ def tool_diagnose_log(args):
             scanned.append(name)
         else:
             missing.append(name)
-    if not texts:
-        return err(f"no log file found in {cwd} (looked for {', '.join(named)})")
+    # A pasted error message is a first-class input: the common case is
+    # "here is the line VASP died on, what do I do", with no run directory at
+    # all. Only fail when there is neither a log file nor text to look at.
+    pasted = str(args.get("text") or "")
+    if not texts and not pasted:
+        return err(f"no log file found in {cwd} (looked for {', '.join(named)}); "
+                   f"pass files=[...] or the error text as 'text'")
     merged = "\n".join(texts.values())
     entries = _error_table()
-    hits = _scan(merged, entries)
-    conv = _convergence(merged)
+    hits = _scan(merged, entries) if texts else []
+    conv = _convergence(merged) if texts else {"markers": [], "electronic_steps": 0,
+                                               "ionic_steps": 0, "converged": False}
+    # With text only there is no run, so a "converged"/"no-marker" verdict would
+    # be a statement about nothing; report only what the text itself proves.
     verdict = ("failed" if any(h["severity"] == "fatal" for h in hits)
-               else "converged" if conv["converged"] else "no-marker")
+               else "converged" if conv["converged"]
+               else "no-marker" if texts else "unknown")
     out = {"cwd": str(cwd), "files": scanned, "missing": missing,
            "verdict": verdict, "convergence": conv,
            "findings": hits, "table_entries": len(entries)}
-    if args.get("text"):
-        extra = _scan(str(args["text"]), entries)
-        out["from_text"] = extra
+    if pasted:
+        out["from_text"] = _scan(pasted, entries)
+        if not texts:
+            # nothing was scanned on disk, so the text decides the verdict
+            out["verdict"] = ("failed" if any(h["severity"] == "fatal" for h in out["from_text"])
+                              else "warning" if out["from_text"] else "no-match")
+            out["note"] = ("diagnosed from the pasted text only; no log file was read. "
+                           "Pass cwd=<run directory> to also check its files.")
     return out
 
 
@@ -1053,11 +1083,20 @@ TOOLS = {
                          "compare": {"type": "array", "items": {"type": "object"}},
                          "notes": {"type": "array", "items": {"type": "string"}}}}},
     "diagnose_log": {"fn": tool_diagnose_log,
-                     "desc": "Explain a failed VASP/qvasp run: matched error signatures with fixes",
+                     "desc": ("Explain a failed VASP/qvasp run: matched error signatures with fixes. "
+                              "Give either cwd=<run directory> to read its log files, or text=<the "
+                              "error message you pasted>, or both."),
                      "schema": {"type": "object", "properties": {
-                         "cwd": {"type": "string"},
-                         "files": {"type": "array", "items": {"type": "string"}},
-                         "text": {"type": "string"}}}},
+                         "cwd": {"type": "string",
+                                 "description": "run directory to scan (relative to QVASP_WORKROOT); "
+                                                "omit when you only have an error message"},
+                         "files": {"type": "array", "items": {"type": "string"},
+                                   "description": "log file names to read in cwd "
+                                                  "(default vasp.log, OUTCAR, OSZICAR, run.log, "
+                                                  "stdout.log, slurm.out)"},
+                         "text": {"type": "string",
+                                  "description": "error text to match, e.g. the last lines of "
+                                                 "vasp.log pasted by the user"}}}},
     "aux_list": {"fn": tool_aux_list,
                  "desc": "Which companion tools (vaspkit, p4vasp, bader, phonopy) are installed",
                  "schema": {"type": "object", "properties": {}}},
@@ -1114,6 +1153,23 @@ def main():
         print(json.dumps({"commands": len(qvasp_commands()),
                           "templates": [p.stem for p in TEMPLATE_DIR.glob("*.json")]}, ensure_ascii=False))
         return 0
+    if "--argcheck" in sys.argv:
+        # Every tool must answer a call with no arguments without leaking a traceback.
+        # Models omit arguments routinely, so this is a release gate, not a nicety.
+        bad = []
+        for name, spec in TOOLS.items():
+            try:
+                out = spec["fn"]({})
+            except Exception as exc:  # noqa: BLE001
+                bad.append({"tool": name, "raised": f"{type(exc).__name__}: {exc}"})
+                continue
+            msg = json.dumps(out, ensure_ascii=False)
+            leaks = [w for w in ("Traceback", "KeyError", "TypeError", "AttributeError",
+                                 "NameError", "IndexError") if w in msg]
+            if leaks:
+                bad.append({"tool": name, "leaked": leaks, "message": msg[:200]})
+        print(json.dumps({"tools": len(TOOLS), "problems": bad}, ensure_ascii=False))
+        return 0 if not bad else 1
     for line in sys.stdin:
         line = line.strip()
         if not line:

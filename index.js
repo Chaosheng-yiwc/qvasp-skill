@@ -20,7 +20,8 @@
  * @module qvasp-skill
  */
 
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { homedir, platform } from 'node:os'
 import { join } from 'node:path'
@@ -43,10 +44,30 @@ function skillVersion(text) {
   return m ? Number(m[1]) : 0
 }
 
+/** Content hash marker, kept beside the skill dir so the skill stays pristine. */
+const hashMarker = (userSkillsDir, name) => join(userSkillsDir, `.${name}.skill-hash`)
+
+function treeHash(dir) {
+  // Hash file names + contents so a changed reference file also counts.
+  const h = createHash('md5')
+  const walk = (d) => {
+    for (const name of readdirSync(d).sort()) {
+      const p = join(d, name)
+      const st = statSync(p)
+      if (st.isDirectory()) walk(p)
+      else h.update(name).update(readFileSync(p))
+    }
+  }
+  walk(dir)
+  return h.digest('hex')
+}
+
 /**
  * Sync bundled skills into the user skill library.
- * Target missing -> copy; target x-version lower -> overwrite whole dir;
- * otherwise untouched (user edits protected).
+ * Target missing -> copy. Target x-version lower -> overwrite whole dir.
+ * Target unchanged since we installed it (hash marker matches) but the package
+ * shipped different bytes -> overwrite, so a forgotten version bump cannot
+ * leave stale docs installed. Target edited by the user -> untouched.
  * @param {string} pluginSkillsDir - package-internal skills/ directory
  * @param {string} userSkillsDir - user skill library directory
  * @returns {Array<{name:string, action:'synced'|'unchanged'|'missing'}>}
@@ -64,13 +85,25 @@ export function syncBuiltinSkills(pluginSkillsDir, userSkillsDir) {
     const destFile = join(destDir, 'SKILL.md')
     const srcText = readFileSync(srcFile, 'utf8')
     let action = 'unchanged'
-    const needsCopy = !existsSync(destFile)
+    let needsCopy = !existsSync(destFile)
       || skillVersion(srcText) > skillVersion(readFileSync(destFile, 'utf8'))
+    if (!needsCopy && treeHash(srcDir) !== treeHash(destDir)) {
+      // Content differs while the version did not go up. Only refresh if the
+      // installed copy is exactly what we put there last time.
+      const marker = hashMarker(userSkillsDir, name)
+      const recorded = existsSync(marker) ? readFileSync(marker, 'utf8').trim() : null
+      if (recorded && recorded === treeHash(destDir)) needsCopy = true
+    }
     if (needsCopy) {
       rmSync(destDir, { recursive: true, force: true })
       mkdirSync(destDir, { recursive: true })
       cpSync(srcDir, destDir, { recursive: true })
+      writeFileSync(hashMarker(userSkillsDir, name), treeHash(destDir) + '\n')
       action = 'synced'
+    } else if (!existsSync(hashMarker(userSkillsDir, name))) {
+      // Content already matches: record the hash so a later package change can
+      // be detected even if the version is not bumped.
+      writeFileSync(hashMarker(userSkillsDir, name), treeHash(destDir) + '\n')
     }
     results.push({ name, action })
   }
