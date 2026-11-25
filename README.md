@@ -3,7 +3,7 @@
 [qvasp](https://qvasp.com) toolkit for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness):
 a **skill pack** (88-command reference, standard workflows, verified pitfalls, a VASP
 failure-signature table, and a survey of the wider VASP skill ecosystem) plus a
-**stdio MCP server** (17 tools) that turns the model from "guessing qvasp flags" into
+**stdio MCP server** (18 tools) that turns the model from "guessing qvasp flags" into
 "running standard, checked procedures".
 
 - Author: **Wencai Yi**, Qufu Normal University (<yiwc@qfnu.edu.cn>)
@@ -33,6 +33,7 @@ The program itself is archived at [doi:10.17632/2v4m39dt3n.1](https://doi.org/10
 | MCP | `workflow_plan` / `workflow_run` / `workflow_status` / `workflow_resume` | Drive multi-stage calculations (10 templates: band-pbe, band-hse, dos-pbe, phonon-pbe, optics-hse, elastic-pbe, relax-only, md-pbe, surface-pbe, freqfix-molecule) with gates (ionic/scf convergence, no VASP error, …) |
 | MCP | `workflow_check` | Lint a workflow template against real stages/gates |
 | MCP | `structure_check` | Symmetry + geometry sanity of a POSCAR (spglib space group, nearest neighbours, overlap/impossible-distance findings) |
+| MCP | `preflight` | Check a case directory's inputs before submitting: species vs POTCAR order, `ENCUT` vs `ENMAX`, `MAGMOM`/`LDAU` lengths, tags VASP silently ignores, smearing vs the task, missing `CHGCAR` |
 | MCP | `result_extract` / `result_compare` | Pull numbers from OUTCAR/EIGENVAL/DOSCAR/… and compare against reference or literature values |
 | MCP | `reference_lookup` / `literature_record` | Verified reference values for known materials (Raman modes, band gaps, …) |
 | MCP | `report_build` | One call on a case directory → `report.md`: provenance, structure check, every value with the file it came from, comparison, verdict |

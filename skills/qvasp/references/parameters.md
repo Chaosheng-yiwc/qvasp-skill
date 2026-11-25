@@ -89,6 +89,44 @@ if used), the energy zero (VBM, Fermi level, or raw), and whether the run reache
 `reached required accuracy` (ions) and `aborting loop because EDIFF is reached`
 (electrons). A number without those five facts cannot be reproduced or compared.
 
+## Energy, enthalpy and pressure
+
+- `free  energy   TOTEN` and `energy(sigma->0)` **do not contain PV**. `PSTRESS`
+  enters the forces and the stress tensor only. To compare phases, or the same phase
+  at two pressures, add it yourself: `H = E + P·V` with `1 GPa·Å³ = 0.00624151 eV`.
+  Comparing raw energies across pressures silently drops the whole PV term.
+- The same trap in reverse for equations of state: energies in eV and volumes in Å³
+  give a bulk modulus in eV/Å³, and `1 eV/Å³ = 160.21766208 GPa`. A B0 reported as
+  `0.6` is not wrong, it is in the other unit.
+- The first `volume of cell` in OUTCAR is the **primitive** cell volume, not the
+  volume of the POSCAR you submitted. For a conventional fcc cell it is 1/4 of what
+  you expect. Use the last occurrence (the one next to `free  energy`) when you want
+  the cell you actually ran.
+
+## Charge mixing: the failure that looks like success
+
+A first SCF can escape into a wrong solution at its first charge mix (rms(c) ≈ 0.5)
+and then converge normally to a pseudosolution a few eV above the right one. The
+symptom is *two runs of the same input differing by 2–3 eV*, or a relaxation whose
+forces are all computed on a wrong charge density — `reached required accuracy`
+appears either way, so no marker warns you.
+
+- Diagnosis: repeat one displacement/volume point twice; the spread must be ~meV.
+  A smooth `E(V)` with a self-consistent `dE/dV = −P` is the second check.
+- Fix: `AMIX = 0.15`, `BMIX = 0.0001` (magnetic systems also `AMIX_MAG = 0.8`,
+  `BMIX_MAG = 0.0001`). Slower per step, and the only way to be sure.
+
+## Molecular dynamics
+
+- A relaxation's `CONTCAR` can carry a **zero velocity block**. `cp CONTCAR POSCAR`
+  then makes VASP skip the Maxwell initialization and the whole MD runs at T = 0 with
+  `TEBEG` set correctly and no message. Strip it: read the atom count from line 7 and
+  keep only the first `8+nat` lines.
+- Check the first OSZICAR step within the first minute: `T` must be ≈ `TEBEG`.
+- XDATCAR in VASP 6 writes `Direct configuration=` (singular) and writes exactly `NSW`
+  frames, not `NSW+1`. A script that requires `NSW+1` frames reports a finished MD as
+  truncated and re-runs it forever.
+
 ## Reading a result you do not trust
 
 - Convergence markers are not correctness. `reached required accuracy` only means the

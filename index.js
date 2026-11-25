@@ -2,10 +2,10 @@
  * qvasp-skill — DeepSeek Harness bundle providing:
  *   1. the `qvasp` skill (synced to the user's skill library at startup,
  *      x-version gated so user edits survive plugin upgrades);
- *   2. the `qvasp` MCP server (stdio, 17 tools: qvasp_run, workflow_*,
- *      structure_check, result_*, reference_lookup, literature_record,
- *      report_build, diagnose_log, aux_*), mounted dynamically with
- *      package-resolved paths.
+ *   2. the `qvasp` MCP server (stdio, 18 tools: qvasp_run, workflow_*,
+ *      structure_check, preflight, result_*, reference_lookup,
+ *      literature_record, report_build, diagnose_log, aux_*), mounted
+ *      dynamically with package-resolved paths.
  *
  * Pure plugin: only public seams (`tools` via the nested MCP entry), zero
  * DSH core changes, zero runtime dependencies.

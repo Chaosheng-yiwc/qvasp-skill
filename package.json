@@ -1,7 +1,7 @@
 {
     "name":  "qvasp-skill",
-    "version":  "1.4.1",
-    "description":  "qvasp toolkit for DeepSeek Harness: 88-command VASP reference skill + MCP server (17 tools) for task analysis, result analysis, error diagnosis, and standard workflows",
+    "version":  "1.5.0",
+    "description":  "qvasp toolkit for DeepSeek Harness: 88-command VASP reference skill + MCP server (18 tools) for task analysis, result analysis, error diagnosis, and standard workflows",
     "license":  "MIT",
     "author":  {
                    "name":  "Wencai Yi",
@@ -50,6 +50,7 @@
                   "server/reference/*.json",
                   "server/workflows/*.json",
                   "!server/**/__pycache__",
+                  "tools/preflight_fixtures.py",
                   "LICENSE",
                   "README.md",
                   "assets",

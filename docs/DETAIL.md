@@ -36,8 +36,28 @@ users in materials simulations", *Comput. Phys. Commun.* **257**, 107535 (2020),
 
 ## The MCP server (`server/`)
 
-`server/qvasp_mcp.py` is a stdio JSON-RPC server with 17 tools. It runs qvasp and VASP on
+`server/qvasp_mcp.py` is a stdio JSON-RPC server with 18 tools. It runs qvasp and VASP on
 the cluster so the agent does not have to hand-assemble command lines.
+
+**Preflight.** `preflight` answers a question that no VASP output can answer afterwards:
+were these inputs the intended ones. It reads `POSCAR`/`POTCAR`/`INCAR`/`KPOINTS` and
+checks the species against the POTCAR order and count, `ENCUT` against the largest `ENMAX`,
+`MAGMOM` and `LDAU*` array lengths against the atom and species counts, tags VASP parses
+and silently ignores (including a `did you mean` suggestion), duplicated tags, `ISMEAR`
+against the task (`-5` during a relaxation), `ICHARG ≥ 10` without a usable `CHGCAR`,
+`ADDGRID` with a dispersion correction, `METAGGA = SCAN` with `LUSE_VDW` *and* `IVDW = 202`,
+and `NCORE > 1` with a hybrid functional. Every finding carries the fix. It returns
+`not_checked` for the properties it cannot decide from files alone, so an "ok" is never
+mistaken for a physics guarantee. `workflow_run` runs it on every calculation stage and
+refuses to submit on an error; warnings are recorded and the stage proceeds, because a
+deliberately coarse mesh is not a mistake. The checker was itself validated against the 71
+shipped examples: every remaining error is one example directory whose inputs are 0-byte
+files, and the false positives it found in its first version (explicit k-point lists,
+the `Reciprocal` line in a line-mode file, a Gamma shift on the mesh line, archived runs
+with no `CHGCAR`) are fixed and covered by a 19-case fixture suite (`python tools/preflight_fixtures.py`).
+The read-only tools (`preflight`, `structure_check`, `result_extract`, `report_build`,
+`diagnose_log`, `workflow_status`) resolve their directory with `create=False`, so a
+misspelled path is reported as missing instead of turning into an empty directory.
 
 **Execution and workflows.** `qvasp_run` (88-command whitelist, argv only, `cwd` must stay
 under `QVASP_WORKROOT`), `qvasp_help`, `workflow_plan`, `workflow_run`, `workflow_status`,

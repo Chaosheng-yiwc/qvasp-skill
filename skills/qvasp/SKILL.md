@@ -1,5 +1,5 @@
 ---
-x-version: 7
+x-version: 8
 name: qvasp
 description: Use when a task involves qvasp or VASP input preparation and post-processing — INCAR/KPOINTS/POTCAR templates, structure editing (supercell, surface, moiré, defects), band/DOS/charge/phonon/optical/magnetic/thermo post-processing, MD analysis, fixing imaginary frequencies, or diagnosing a VASP crash / non-converged run. Provides the exact 88-command reference, the standard workflows, the known pitfalls, and a failure-signature table so commands, flags and error fixes are never guessed.
 whenToUse: The user mentions qvasp, VASP post-processing (band/DOS/POTCAR/KPOINTS), phonons, Bader charges, work function, optical/IR/Raman spectra, MD trajectory analysis, a VASP error message or a job that failed to converge, or asks to compute/verify something with VASP on a cluster.
@@ -36,6 +36,10 @@ Implemented and maintained by **Wencai Yi**, Qufu Normal University. Cite it as:
    a reference value; do not trust the tool blindly.
 6. **Long jobs go through the scheduler.** Use `qsub`/`sbatch`; never run VASP in a
    foreground shell that can time out.
+7. **A tag VASP does not know is not an error.** It is parsed, ignored and never
+   mentioned again, so a misspelled `KSPACING` or an invented `EXT_PRES` looks exactly
+   like a setting that was applied. Read the unknown-tag warnings in
+   `references/errors.md` and let `preflight` check the files.
 
 ## Typical pipeline
 
@@ -69,6 +73,7 @@ record what was run.
 | cite a value you found | `literature_record` (refuses an entry without a DOI or URL) |
 | write the report | `report_build` with `system=<case dir>` → `report.md` there; it reads the last stage's files itself and names the file behind every number |
 | the job crashed or never converged | `diagnose_log` — matches the log against a table of VASP/qvasp failure signatures and returns the cause plus the fix |
+| check the inputs before spending walltime on them | `preflight` — species/POTCAR order, `ENCUT` vs `ENMAX`, `MAGMOM`/`LDAU` array lengths, tags VASP ignores, smearing vs the task, missing `CHGCAR`. It answers from the files alone, so run it before `qsub`; `workflow_run` calls it on every calculation stage and refuses to submit on an error |
 
 `workflow_run` is resumable and returns `{"waiting": true}` while a job is queued. Call it
 again (or `workflow_resume`) after the job ends; it evaluates the stage gate then.

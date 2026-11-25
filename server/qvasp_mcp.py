@@ -69,11 +69,20 @@ def qvasp_commands():
     return _cmds
 
 
-def safe_cwd(cwd):
+def safe_cwd(cwd, create=True):
+    """Resolve `cwd` inside the work root.
+
+    create=True is for the tools that are about to write there (a run, a
+    workflow stage, an aux tool). Tools that only read -- preflight, structure
+    check, extraction, report, diagnosis -- must pass create=False: creating the
+    directory first makes "does not exist" impossible to detect and leaves an
+    empty directory behind every time a caller misspells a path.
+    """
     p = (WORKROOT / cwd).resolve() if not os.path.isabs(cwd) else Path(cwd).resolve()
     if WORKROOT != p and WORKROOT not in p.parents:
         raise ValueError(f"cwd {p} is outside QVASP_WORKROOT {WORKROOT}")
-    p.mkdir(parents=True, exist_ok=True)
+    if create:
+        p.mkdir(parents=True, exist_ok=True)
     return p
 
 
@@ -153,6 +162,30 @@ def kpoints_stdin(stage):
     with 'ERROR: invalid dimensionality'. 3 = bulk is the default assumption;
     a stage may override it with "dim": 2 or 1."""
     return [str(stage.get("dim", 3))]
+
+
+def run_kpoints(command, stage, cwd, final_name):
+    """Write a KPOINTS file with a qvasp k-point generator; return an error or None.
+
+    In a dry run the structure a path generator needs (an upstream CONTCAR) does
+    not exist yet, so the command is refused. That is expected and must not fail
+    the stage. A real failure -- the generator ran and wrote nothing -- is
+    returned so the caller can fail the stage instead of submitting a job with a
+    missing or stale k-mesh.
+    """
+    r = run_qvasp({"command": command, "cwd": str(cwd), "stdin": kpoints_stdin(stage)})
+    src = cwd / "KPOINTS"
+    if "error" in r:
+        return None if SCHEDULER == "none" else r["error"]
+    if r["exit_code"] != 0 or r["qvasp_error"]:
+        return (f"{command} failed (exit {r['exit_code']}): "
+                + "\n".join(r["stdout_tail"].splitlines()[-6:]))
+    if not src.exists():
+        return f"{command} exited 0 but wrote no KPOINTS; the stage would run with no k-mesh"
+    if final_name != "KPOINTS":
+        src.replace(cwd / final_name)
+    return None
+
 
 
 def load_template(wf_id):
@@ -622,6 +655,15 @@ def tool_workflow_run(args):
             extra_env = POST_ENV_SOURCES if kind == "post" else ""
             r = run_qvasp({"command": stage["qvasp"], "cwd": str(cwd), "stdin": stage.get("stdin", []),
                            "env_sources": extra_env})
+            # run_qvasp returns {"error": ...} (no "stdout_tail") when a guard
+            # refuses the command -- a missing binary, a name that is not a qvasp
+            # subcommand. Indexing it blindly turned that refusal into a KeyError
+            # traceback from inside a workflow stage.
+            if "error" in r:
+                rec.update(state="failed", error=r["error"])
+                save(root, st)
+                return {"stage": sid, "failed": r["error"],
+                        "hint": "the stage's qvasp command was refused; fix it in the template"}
             log = r["stdout_tail"]
             if r["exit_code"] != 0 or r["qvasp_error"]:
                 rec.update(state="failed", error=log)
@@ -631,18 +673,56 @@ def tool_workflow_run(args):
                 apply_overrides(cwd / "INCAR", stage.get("overrides"))
         if stage.get("kpoints_opt"):
             # band path -> KPOINTS_OPT, then a uniform mesh -> KPOINTS
-            run_qvasp({"command": stage["kpoints_opt"], "cwd": str(cwd),
-                       "stdin": kpoints_stdin(stage)})
-            src = cwd / "KPOINTS"
-            if src.exists():
-                src.replace(cwd / "KPOINTS_OPT")
-            if stage.get("kpoints"):
-                run_qvasp({"command": stage["kpoints"], "cwd": str(cwd),
-                           "stdin": kpoints_stdin(stage)})
+            problem = run_kpoints(stage["kpoints_opt"], stage, cwd, "KPOINTS_OPT")
+            if stage.get("kpoints") and not problem:
+                problem = run_kpoints(stage["kpoints"], stage, cwd, "KPOINTS")
         elif stage.get("kpoints"):
-            run_qvasp({"command": stage["kpoints"], "cwd": str(cwd),
-                       "stdin": kpoints_stdin(stage)})
+            problem = run_kpoints(stage["kpoints"], stage, cwd, "KPOINTS")
+        else:
+            problem = None
+        if problem:
+            rec.update(state="failed", error=problem)
+            save(root, st)
+            return {"stage": sid, "failed": problem,
+                    "hint": "the k-points file could not be written; check the stage's kpoints command"}
         if kind == "calc":
+            # Catch a broken input in a second instead of after a wasted job.
+            # Only *errors* stop the stage; warnings are reported and pass, because
+            # a deliberate choice (a coarse k-mesh in a dry run, for instance) must
+            # not be forbidden.
+            try:
+                pre = _preflight().check(str(cwd))
+            except Exception as exc:  # a checker bug must never block a workflow
+                pre = {"errors": 0, "warnings": 0,
+                       "findings": [{"level": "warning", "check": "preflight-crashed",
+                                     "message": f"preflight could not run: {exc}",
+                                     "fix": ""}]}
+            forgiven = set()
+            if pre.get("errors"):
+                bad_findings = [f for f in pre["findings"] if f["level"] == "error"]
+                # In a dry run the upstream stage never produced its files, so a
+                # stage that declares `inputs: {"../01-scf/CHGCAR": "CHGCAR"}` is
+                # reported as ICHARG = 11 without a density. That is the dry run
+                # talking, not a broken input; keep it as a note so the plan can
+                # still be walked to the end.
+                if SCHEDULER == "none":
+                    borrowed = {str(v).upper() for v in (stage.get("inputs") or {}).values()}
+                    if "CHGCAR" in borrowed:
+                        dry_notes += [f"preflight (dry run): {f['check']}: {f['message']}"
+                                      for f in bad_findings if f["check"] == "icharg-no-chgcar"]
+                        forgiven.add("icharg-no-chgcar")
+                        bad_findings = [f for f in bad_findings if f["check"] != "icharg-no-chgcar"]
+                if bad_findings:
+                    bad = [f"{f['check']}: {f['message']}" for f in bad_findings]
+                    rec.update(state="failed", error="preflight: " + "; ".join(bad))
+                    save(root, st)
+                    return {"stage": sid, "preflight_failed": bad,
+                            "hint": "fix the inputs (or pass dry=true) and call workflow_run again"}
+            if pre.get("findings"):
+                # a finding already reported above (as forgiven or as a blocker)
+                # must not be repeated: two identical notes read like two faults
+                dry_notes += [f"preflight: {f['check']}: {f['message']}"
+                              for f in pre["findings"] if f["check"] not in forgiven]
             write_pbs(cwd)
             try:
                 sub = submit(cwd, tpl)
@@ -683,7 +763,7 @@ def save(root, st):
 
 
 def tool_status(args):
-    root = safe_cwd(args.get("system", "."))
+    root = safe_cwd(args.get("system", "."), create=False)
     st = workflow_state(root)
     if not st:
         return {"error": "no workflow in " + str(root)}
@@ -721,9 +801,29 @@ def _analysis():
     return parsers, structure, compare, report
 
 
+def _preflight():
+    _analysis()
+    from analysis import preflight  # noqa: PLC0415
+    return preflight
+
+
+def tool_preflight(args):
+    """Check the inputs of a case directory before spending walltime on it."""
+    pre = _preflight()
+    cwd = safe_cwd(args.get("cwd", "."), create=False)
+    if not cwd.exists():
+        return err(f"preflight: {cwd} does not exist")
+    if not cwd.is_dir():
+        return err(f"preflight: {cwd} is not a directory")
+    names = {key: args.get(key) or default for key, default in
+             (("poscar", "POSCAR"), ("potcar", "POTCAR"),
+              ("incar", "INCAR"), ("kpoints", "KPOINTS"))}
+    return pre.check(str(cwd), **names)
+
+
 def tool_structure_check(args):
     _, structure, _, _ = _analysis()
-    path = safe_cwd(args.get("cwd", ".")) / args.get("file", "POSCAR")
+    path = safe_cwd(args.get("cwd", "."), create=False) / args.get("file", "POSCAR")
     if not path.exists():
         return err(f"{path} not found")
     return structure.check(str(path), symprec=args.get("symprec", 1e-3))
@@ -734,7 +834,7 @@ def tool_result_extract(args):
         return err("result_extract needs 'file' (e.g. OUTCAR/EIGENVAL/DOSCAR) and 'kind' "
                    "(known: band_gap, dos_at_ef, mae, phonon_min, rdf_first_peak, thermo)")
     parsers, _, _, _ = _analysis()
-    path = safe_cwd(args.get("cwd", ".")) / args["file"]
+    path = safe_cwd(args.get("cwd", "."), create=False) / args["file"]
     if not path.exists():
         return err(f"{path} not found")
     return parsers.extract(args["kind"], str(path))
@@ -817,7 +917,7 @@ def tool_report_build(args):
         if not isinstance(item, dict) or not item.get("property") or item.get("value") is None:
             return err("each 'compare' item needs 'property' and 'value', "
                        r'e.g. {"property": "band_gap", "value": 4.12, "unit": "eV"}')
-    cwd = safe_cwd(raw)
+    cwd = safe_cwd(raw, create=False)
     st = None
     if poscar.exists():
         st = structure.check(str(poscar))
@@ -911,7 +1011,7 @@ def _convergence(text):
 
 def tool_diagnose_log(args):
     """Explain a failed (or suspicious) VASP/qvasp run from its log files."""
-    cwd = safe_cwd(args.get("cwd", "."))
+    cwd = safe_cwd(args.get("cwd", "."), create=False)
     named = args.get("files") or list(DIAG_FILES)
     texts, scanned, missing = {}, [], []
     for name in named:
@@ -1077,6 +1177,17 @@ TOOLS = {
                         "schema": {"type": "object", "properties": {
                             "cwd": {"type": "string"}, "file": {"type": "string"},
                             "symprec": {"type": "number"}}}},
+    "preflight": {"fn": tool_preflight,
+                  "desc": ("Check INCAR/KPOINTS/POSCAR/POTCAR before submitting: species vs "
+                           "POTCAR order, ENCUT against ENMAX, MAGMOM and LDAU array lengths, "
+                           "fake and duplicated tags, smearing vs task, missing CHGCAR. "
+                           "Returns errors and warnings with the fix for each."),
+                  "schema": {"type": "object", "properties": {
+                      "cwd": {"type": "string"},
+                      "poscar": {"type": "string", "description": "default POSCAR"},
+                      "potcar": {"type": "string", "description": "default POTCAR"},
+                      "incar": {"type": "string", "description": "default INCAR"},
+                      "kpoints": {"type": "string", "description": "default KPOINTS"}}}},
     "result_extract": {"fn": tool_result_extract,
                        "desc": "Parse a qvasp/VASP output into typed values",
                        "schema": {"type": "object", "properties": {

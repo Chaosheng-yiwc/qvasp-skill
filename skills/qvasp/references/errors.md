@@ -38,6 +38,32 @@ edits cannot be diagnosed later.
 | `mpirun: command not found` | the job script's environment was not sourced on the compute node | source the cluster's Intel/MPI environment inside the job script (`source .../intel2020.env`, `source .../impi2019.env`) before `mpirun` |
 | `execvp error on file vasp_std` | the binary name has no absolute path and the compute node does not inherit your login `PATH` | use an absolute path in the job script, e.g. `/public/software/vasp/vasp.6.5.1/bin/vasp_std` |
 | `forrtl: severe (24): end-of-file during read` | a fixed-format read ran past the end of a file — most often a `POSCAR` whose coordinate block is shorter than the header promises | count the atoms: the header says N, the coordinate block must have N lines. qvasp 3.01 fixed a reader that consumed one extra line when the mode line read `Cartesian` |
+| `forrtl: severe (59): list-directed I/O syntax error` + `0 types 0 ions` | the second line of `POSCAR` is not a plain number. VASP reads that line as the universal scaling factor; a leftover label, a unit or an empty line makes the whole header shift by one line | the layout is `comment` / `scale` / three lattice vectors / species names / counts. Put the scale (usually `1.0`) on line 2 and nothing else |
+| `I REFUSE TO CONTINUE WITH THIS SICK JOB` (message above it varies) | VASP's generic refusal. The line **before** it is the real error — read upwards | `ADDGRID = .TRUE.` together with a TS/vdW correction, `SYMPREC` too tight for the cell, or a mangled `POSCAR` are the common ones |
+| `Inconsistent Bravais lattice types found for crystalline and reciprocal lattice` | the cell is a hair off hexagonal symmetry: an `a*sqrt(3)/2` written to 6 decimals is already ~4e-5 off, which exceeds `SYMPREC = 1e-5` | write lattice vectors to ≥10 decimals, or set `SYMPREC = 1E-4` |
+| `ERROR: ADDGRID=.TRUE. is not supported for TS correction methods` | `ADDGRID` and the Tkatchenko-Scheffler dispersion are mutually exclusive | drop `ADDGRID` for that run |
+| `qsub: cannot connect to server (null) ... could not connect to trqauthd` | a compute node cannot reach the Torque server; a self-resubmitting pipeline dies at its second link | submit only from the login node, or `ssh` back to it (`ssh -o BatchMode=yes <login> /opt/.../qsub <abs job.pbs>`) |
+| a child job runs in the wrong directory | a job submitted from inside another PBS job inherits `PBS_O_WORKDIR` (and friends) from its parent | `unset PBS_O_WORKDIR PBS_O_HOME PBS_O_LOGNAME PBS_O_HOST` before the inner `qsub`, and pass `qsub -d <absolute dir>` |
+| every rank dies in `FFT: planning ... GRID`, rank 0 `SIGSEGV`, others `SIGKILL` | `vasp_std` is built with OpenMP; 12 MPI ranks × 12 threads exhausts the node's memory | `ulimit -s unlimited`, `export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1` in the job script |
+| `mpirun` aborts inside `MPI_Init` on the whole node | a broken MPI/launcher pairing (seen with VASP 6.3.1 multi-process and with Intel MPI's default SSH bootstrap inside PBS) | use a working build (6.5.1 here) and a single-node launcher: `mpirun -bootstrap fork -n N ...` |
+
+
+## Inputs VASP accepts and silently ignores
+
+These produce no message at all. The job converges, the file is there, and the
+number is wrong — the most expensive class of mistake, because nothing to grep
+for exists. `preflight` flags the ones it can prove from the files.
+
+| what you wrote | what VASP did | what to write |
+| --- | --- | --- |
+| a tag that is not a VASP tag (`EXT_PRES`, `PRESS`, `KSPCACING`, `LVDW`, …) | parsed the line, ignored it, and continued as if it were absent | the real tag. External pressure is `PSTRESS` in **kB** (`1 GPa = 10 kB`); the k-point density tag is `KSPACING`. A misspelled tag is invisible in the output: eight "pressure points" all ran at 0 GPa and all had identical energies |
+| `KSPACING` while a `KPOINTS` file is present | the file wins; `KSPACING` is then dead weight | keep one mechanism. `KGAMMA` belongs with `KSPACING` |
+| a k-mesh written as a density in `KPOINTS` (`0.1 0.1 0.1`) | read the three numbers as integers, got `NKPTS = 0`, and spun at full load for hours without writing a result | the three numbers are **counts**, e.g. `16 16 16`. A Gamma-only file is 5 lines: `K-Points Gamma only` / `0` / `Gamma` / `1 1 1` / `0 0 0` |
+| a line-mode `KPOINTS` with the segment point count on the fourth line | took the count from the **scale line (2nd)** instead, generated 2 points per segment, and said nothing | point count on line 2. Verify with `Generated N points on each line segment` in `OUTCAR` |
+| a line-mode `KPOINTS` without the word `Reciprocal` | consumed the first corner as the coordinate-system line, so the path started at the second point | write `Reciprocal` on line 3 (or `rec`); verify `total of N k-points` equals segments × points per segment |
+| `MAGMOM = 4*5.0 6*0.0` when the cell has 11 atoms | used what it could and defaulted the rest | the expanded count must equal `NIONS`. Always expand by hand or with the tool |
+| `LDAUU`/`LDAUJ`/`LDAUL` shorter than the species list | padded with zeros, so one species silently lost its +U | one entry per species **in POSCAR order**, including the ones you do not want to correct (`-1` for `LDAUL`, `0.0` for `LDAUU/J`) |
+| `METAGGA = SCAN` + `LUSE_VDW = .TRUE.` **and** `IVDW = 202` | applied two different van der Waals mechanisms at once | `IVDW = 202` is MBD@rsSCS, a post-hoc correction; rVV10 is triggered by `LUSE_VDW`. rVV10: `METAGGA = SCAN`, `LUSE_VDW = .TRUE.`, `BPARAM = 15.7`, `CPARAM = 0.0093` and **no** `IVDW` line |
 
 ## Runs that finish but are wrong
 

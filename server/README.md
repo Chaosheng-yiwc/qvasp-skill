@@ -1,17 +1,17 @@
 # qvasp MCP server
 
 Standalone Python MCP server shipped with the `qvasp-skill` plugin. It exposes
-17 tools over stdio (`transport: stdio`, launched by `@deepseek-ai/dsh-mcp-client`).
+18 tools over stdio (`transport: stdio`, launched by `@deepseek-ai/dsh-mcp-client`).
 
 ## Layout
 
 ```
-qvasp_mcp.py        entry point + 17 tool implementations
+qvasp_mcp.py        entry point + 18 tool implementations
 stages.json         10 stage prototypes (relax/scf/nscf/hybrid/dfpt/elastic/soc/md/transport/post)
 workflows/*.json    10 workflow templates (band-pbe, band-hse, dos-pbe, phonon-pbe,
                     optics-hse, elastic-pbe, relax-only, md-pbe, surface-pbe, freqfix-molecule)
 errors.json         22 VASP/qvasp failure signatures used by diagnose_log
-analysis/           structure_check / result_extract / report_build helpers
+analysis/           structure_check / result_extract / report_build / preflight helpers
 reference/          references.json (literature values used by result_compare)
 ```
 
@@ -28,7 +28,7 @@ reference/          references.json (literature values used by result_compare)
 ## Tools
 
 `qvasp_run`, `qvasp_help`, `workflow_plan`, `workflow_run`, `workflow_status`,
-`workflow_resume`, `workflow_check`, `structure_check`, `result_extract`,
+`workflow_resume`, `workflow_check`, `structure_check`, `preflight`, `result_extract`,
 `result_parse` (alias), `result_compare`, `reference_lookup`, `literature_record`,
 `report_build`, `diagnose_log`, `aux_list`, `aux_run`.
 
@@ -80,6 +80,51 @@ reference/          references.json (literature values used by result_compare)
 - `aux_run` returns the tool's own output verbatim and interprets nothing. When a
   backend is missing the answer is `null` from `aux_list` and a plain error from
   `aux_run`, so a machine without the optional backend is not a broken install.
+- **`analysis/preflight.py` judges inputs, and every rule in it was checked against
+  the 71 shipped examples before it was allowed to block anything.** The rules that
+  block a `workflow_run` stage are the ones that make a run silently wrong rather
+  than fail: species that do not match the POTCAR (a count mismatch, or a permuted
+  order — which converges cleanly and produces a different material), `ENCUT` below
+  the largest `ENMAX`, `MAGMOM`/`LDAU*` lengths that VASP pads with zeros, tags VASP
+  parses and ignores, `ISMEAR = -5` during a relaxation, `ICHARG >= 10` with no
+  `CHGCAR`, `ADDGRID` with a dispersion correction, and `NCORE > 1` with a hybrid.
+  Everything else is a warning, and the warnings are deliberate: a coarse mesh is a
+  choice, not a defect. Two rules learned the hard way:
+  - The missing-input rule reports an error only for a missing `POSCAR`. k-mesh and
+    post-processing example directories legitimately hold nothing else; treating
+    that as fatal rejected `3.KPOINTS/*` and `10.Post-MD-misc/gauss`.
+  - `ICHARG >= 10` without a `CHGCAR` is an error only when there is no `OUTCAR`.
+    With an `OUTCAR` the directory is an archive of a finished run whose density was
+    simply not kept — ten example directories were misreported before this split.
+  - `check_kpoints` must accept three input styles: an integer mesh, a line-mode
+    block, and an **explicit k-point list** (`rec` / `Reciprocal` / `Reciprocal
+    lattice` on line 3). It must not count the `Reciprocal` line as a path endpoint,
+    and it must accept a Gamma shift written on the mesh line (`16 16 16 0 0 0`),
+    which is valid Fortran list-directed input.
+- `preflight.check()` is a pure function of the files. It is called by
+  `workflow_run` before `write_pbs`/`submit`, and a crash inside it degrades to one
+  `preflight-crashed` warning — a checker bug must never block a real job.
+  A 19-case fixture suite (`tools/preflight_fixtures.py`, one directory per rule)
+  guards the rules: `python tools/preflight_fixtures.py` must exit 0.
+- **Read-only tools must not create directories.** `safe_cwd(path, create=False)` is
+  mandatory for `preflight`, `structure_check`, `result_extract`, `report_build`,
+  `diagnose_log` and `workflow_status`. With the default `create=True` a misspelled
+  path silently becomes an empty directory (and `does not exist` can never be
+  reported); only the tools that are about to write there may create it.
+- **A helper that returns `{"error": ...}` must be checked, not indexed.**
+  `run_qvasp` refuses a command it cannot vouch for (no binary, unknown
+  subcommand) with that dict and no `stdout_tail`; a stage that did `r["stdout_tail"]`
+  first turned the refusal into a `KeyError` traceback. `run_kpoints` returns
+  `None` or a message instead, so a stage cannot accidentally submit a job whose
+  KPOINTS was never written.
+- **A dry run must be able to walk to the last stage.** With
+  `QVASP_SCHEDULER=none` the upstream stage never produced its files, so a stage
+  that borrows `CHGCAR` is reported as `ICHARG = 11` without a density. Only that
+  one check is forgiven and moved into `notes` (prefixed `preflight (dry run):`);
+  every other error still stops the stage, and outside a dry run the same case
+  still fails — a missing CHGCAR there is a real missing input. The forgiven check
+  is not repeated in the general findings list, because two identical notes read
+  like two separate faults.
 - **Every parser in `analysis/parsers.py` must prove the file is the type it
   claims.** A parser that skips the check does not fail loudly — it returns a
   plausible number read from the wrong column, which is worse than an error.

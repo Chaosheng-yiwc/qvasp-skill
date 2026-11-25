@@ -84,6 +84,22 @@ you interpret or hand off results.
 - Phonon frequencies near zero are noise, not soft modes: the three acoustic branches of
   a stable crystal land at ~1e-5 cm⁻¹. Only `f < -1 cm⁻¹` is worth reporting as imaginary.
 
+## Inputs that are silently not what they say
+
+- VASP parses an unknown INCAR tag, ignores it, and prints nothing. `KSPCACING`
+  instead of `KSPACING` therefore reads like a k-mesh instruction and is not one.
+  This is not hypothetical: five INCARs under `Examples_new` (the `e` and `gauss`
+  cases) carry `KSPCACING = 0.1` and were run with it — the runs used their
+  `KPOINTS`, so the intent happened to be harmless, but the line did nothing.
+  `preflight` reports it with the correct spelling suggested.
+- `EXT_PRES` does not exist; the pressure tag is `PSTRESS` in kB (`1 GPa = 10 kB`).
+  A set of eight "pressure points" written with `EXT_PRES` all ran at 0 GPa, with
+  identical energies and identical iteration counts.
+- An `ICHARG ≥ 10` directory without a `CHGCAR` is ambiguous: an *archive* (OUTCAR
+  present, density simply not kept) or a run about to start from a superposition
+  with the charge frozen. The first is normal, the second is a wrong calculation.
+  Look for the OUTCAR before deciding which you have.
+
 ## POTCAR
 
 - `-pbe/-lda/-pw91` take the library element names (`Sr_sv`, `Ti_pv`, `O`, …), not the
