@@ -59,6 +59,14 @@ The read-only tools (`preflight`, `structure_check`, `result_extract`, `report_b
 `diagnose_log`, `workflow_status`) resolve their directory with `create=False`, so a
 misspelled path is reported as missing instead of turning into an empty directory.
 
+A second guard covers the other half of "it must not crash": `python tools/tool_smoke.py`
+runs all 18 tools with real arguments while `QVASP_BIN` names a binary that does not exist
+and no scheduler is installed. It fails on any leaked `Traceback`/`KeyError`/`FileNotFoundError`
+or on an error message that does not say what to install. Empty-argument checks cannot find
+this, because they return before any subprocess is reached; `qvasp_help` and
+`submit`/`job_alive` returned raw `FileNotFoundError` until they were given the same message
+discipline the rest of the server had.
+
 **Execution and workflows.** `qvasp_run` (88-command whitelist, argv only, `cwd` must stay
 under `QVASP_WORKROOT`), `qvasp_help`, `workflow_plan`, `workflow_run`, `workflow_status`,
 `workflow_resume`, `workflow_check`. Ten templates ship in `server/workflows/`

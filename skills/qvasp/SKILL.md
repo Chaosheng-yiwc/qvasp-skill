@@ -1,5 +1,5 @@
 ---
-x-version: 8
+x-version: 9
 name: qvasp
 description: Use when a task involves qvasp or VASP input preparation and post-processing — INCAR/KPOINTS/POTCAR templates, structure editing (supercell, surface, moiré, defects), band/DOS/charge/phonon/optical/magnetic/thermo post-processing, MD analysis, fixing imaginary frequencies, or diagnosing a VASP crash / non-converged run. Provides the exact 88-command reference, the standard workflows, the known pitfalls, and a failure-signature table so commands, flags and error fixes are never guessed.
 whenToUse: The user mentions qvasp, VASP post-processing (band/DOS/POTCAR/KPOINTS), phonons, Bader charges, work function, optical/IR/Raman spectra, MD trajectory analysis, a VASP error message or a job that failed to converge, or asks to compute/verify something with VASP on a cluster.
@@ -84,6 +84,11 @@ decides when it is finished.
 
 A value that comes back `unverified` has no sourced reference behind it. Never present it
 as agreeing with experiment — report it as this calculation's own result.
+
+If a tool answers `qvasp binary not available … install qvasp or set QVASP_BIN`, the server
+is running but the binary is not on its PATH: pass the absolute path via `QVASP_BIN` in the
+MCP server config rather than guessing commands. The same message pattern covers
+`QVASP_SCHEDULER=none` (inputs only, no job) and a missing `qsub`/`qstat`.
 
 ## When a VASP job fails
 

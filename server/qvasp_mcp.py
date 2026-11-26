@@ -147,12 +147,25 @@ def run_qvasp(args):
 
 
 def tool_help(args):
-    topic = args.get("topic")
+    topic = str(args.get("topic") or "").strip()
+    cmds = qvasp_commands()
+    if not cmds:
+        # qvasp_commands() already swallowed the OSError and returned [] -- say so
+        # here instead of running the binary again and letting FileNotFoundError
+        # escape as a raw traceback string.
+        return err(f"qvasp binary not available (tried '{QVASP_BIN} -h'); "
+                   f"install qvasp or set QVASP_BIN (the command list is read "
+                   f"from its own help text)")
     if topic:
-        out = subprocess.run([QVASP_BIN, "-h"], capture_output=True, text=True, timeout=30).stdout
+        try:
+            out = subprocess.run([QVASP_BIN, "-h"], capture_output=True, text=True,
+                                 timeout=30).stdout
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return err(f"cannot run '{QVASP_BIN} -h' ({exc}); install qvasp or "
+                       f"set QVASP_BIN")
         hits = [ln for ln in out.splitlines() if topic in ln]
-        return {"commands": qvasp_commands(), "matching_lines": hits[:20]}
-    return {"commands": qvasp_commands(), "count": len(qvasp_commands())}
+        return {"commands": cmds, "matching_lines": hits[:20]}
+    return {"commands": cmds, "count": len(cmds)}
 
 
 # ------------------------------------------------------------------ workflows --
@@ -421,11 +434,17 @@ def submit(cwd, template):
     if SCHEDULER == "pbs":
         if not (cwd / "vasp.pbs").exists():
             raise ValueError("vasp.pbs missing in " + str(cwd))
-        out = subprocess.run([scheduler_tool("qsub"), "vasp.pbs"], cwd=str(cwd),
-                             capture_output=True, text=True)
+        argv = [scheduler_tool("qsub"), "vasp.pbs"]
     else:
-        out = subprocess.run([scheduler_tool("sbatch"), "run.sh"], cwd=str(cwd),
-                             capture_output=True, text=True)
+        argv = [scheduler_tool("sbatch"), "run.sh"]
+    try:
+        out = subprocess.run(argv, cwd=str(cwd), capture_output=True, text=True)
+    except OSError as exc:
+        # a missing scheduler binary is a configuration problem, not a crash:
+        # raise ValueError so the caller's existing handler reports it as a
+        # failed stage instead of a traceback.
+        raise ValueError(f"cannot run {argv[0]}: {exc}; is {SCHEDULER} installed "
+                         f"and on PATH? set QVASP_SCHEDULER=none to prepare inputs only")
     job = (out.stdout or "").strip().split()[0] if out.stdout.strip() else ""
     if not job:
         raise ValueError("submit failed: " + (out.stderr or out.stdout or "no output").strip())
@@ -524,8 +543,13 @@ def job_alive(job_id):
         return False
     tool = "qstat" if SCHEDULER == "pbs" else "squeue"
     exe = scheduler_tool(tool)
-    out = subprocess.run([exe, "-j", job_id] if tool == "squeue" else [exe, job_id],
-                         capture_output=True, text=True)
+    try:
+        out = subprocess.run([exe, "-j", job_id] if tool == "squeue" else [exe, job_id],
+                             capture_output=True, text=True)
+    except OSError:
+        # No scheduler on this machine: report "not alive" so status queries keep
+        # working instead of raising out of every caller.
+        return False
     text = (out.stdout or "") + (out.stderr or "")
     if "Unknown Job Id" in text or "Invalid job id" in text:
         return False
@@ -766,7 +790,8 @@ def tool_status(args):
     root = safe_cwd(args.get("system", "."), create=False)
     st = workflow_state(root)
     if not st:
-        return {"error": "no workflow in " + str(root)}
+        return {"error": f"no workflow in {root}; start one with workflow_run "
+                         f"(workflow=<name>, system=<case directory>)"}
     # A submitted stage whose job has already left the queue is reported as
     # still "submitted" in workflow.json; say so explicitly instead of making
     # the caller poll a job id that no longer exists.

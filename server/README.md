@@ -106,6 +106,20 @@ reference/          references.json (literature values used by result_compare)
   `preflight-crashed` warning — a checker bug must never block a real job.
   A 19-case fixture suite (`tools/preflight_fixtures.py`, one directory per rule)
   guards the rules: `python tools/preflight_fixtures.py` must exit 0.
+- **A tool that shells out must answer, not raise, when the binary is absent.**
+  `qvasp_help` had no `OSError` guard around `qvasp -h`, so on a machine without
+  qvasp it returned a raw `FileNotFoundError: [WinError 2]` instead of saying what
+  to install; `submit`/`job_alive` could do the same without qsub/qstat. All three
+  now return a message that names the missing program and the way out
+  (`install qvasp`, `set QVASP_BIN`, `set QVASP_SCHEDULER=none`).
+  `--argcheck` cannot catch this class of bug — it calls every tool with `{}`, and
+  the empty-argument guard returns before any subprocess starts. The guard that
+  can is `tools/tool_smoke.py`: it points `QVASP_BIN` at a name that does not
+  exist, feeds every tool real arguments against a temp case directory, and fails
+  if any reply contains `Traceback`/`KeyError`/`FileNotFoundError`/... or an error
+  message that gives no way forward. `python tools/tool_smoke.py` must exit 0 on a
+  machine with neither qvasp nor a scheduler; it asserts its own coverage, so a
+  new tool cannot be added without a smoke case.
 - **Read-only tools must not create directories.** `safe_cwd(path, create=False)` is
   mandatory for `preflight`, `structure_check`, `result_extract`, `report_build`,
   `diagnose_log` and `workflow_status`. With the default `create=True` a misspelled
