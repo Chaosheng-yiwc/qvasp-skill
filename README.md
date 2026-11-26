@@ -63,6 +63,24 @@ or from GitHub releases:
 dsh plugin --profile <your-profile> add github:Chaosheng-yiwc/qvasp-skill
 ```
 
+**Installing within a day of a release can give you the previous version.** pnpm 11
+defaults `minimumReleaseAge` to 1440 minutes, so a version published less than a day ago
+is not resolved and a bare range falls back to the newest version older than that.
+Measured here: ten minutes after 1.5.1 was published, `pnpm add qvasp-skill` installed
+1.4.1, while `--config.minimumReleaseAge=0` installed 1.5.1. This is a pnpm supply-chain
+guard ([docs](https://pnpm.io/supply-chain-security)), not a registry or packaging fault.
+To get today's release, name it or lift the guard:
+
+```
+pnpm add qvasp-skill@1.5.1
+# or:  pnpm add qvasp-skill --config.minimum-release-age=0
+# or, in pnpm-workspace.yaml:  minimumReleaseAgeExclude: ['qvasp-skill@1.5.1']
+```
+
+Use the dashed key on the command line: pnpm 12.3+ silently ignores
+`--config.minimumReleaseAge=0` (camelCase) while `--config.minimum-release-age=0` is
+honoured.
+
 On startup the bundle:
 
 1. syncs the `qvasp` skill into your skill library (`~/.agents/skills/qvasp`,

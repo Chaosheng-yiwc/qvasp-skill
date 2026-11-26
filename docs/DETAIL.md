@@ -138,6 +138,14 @@ The interpreter search is `QVASP_PYTHON` → `python`/`python3` on PATH → the 
 conda and system install directories, because python is often installed on a machine
 without being reachable from the PATH a GUI application inherits.
 
+pnpm 11 flipped `minimumReleaseAge` to 1440 minutes, so a version published in the last
+day is not resolved by a bare `pnpm add qvasp-skill`; the range silently falls back to
+the newest version older than a day. Measured on this project: ten minutes after 1.5.1
+was published, `pnpm add qvasp-skill` installed 1.4.1, and `--config.minimumReleaseAge=0`
+installed 1.5.1. The market entry and this README therefore mention the guard instead of
+promising "always the latest".
+
+
 ## Scope and limits
 
 - The skill itself executes nothing: running qvasp uses the agent's shell or SSH tools.
