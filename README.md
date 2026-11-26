@@ -96,6 +96,17 @@ python server/qvasp_mcp.py --selftest   # needs qvasp on PATH for full check
 node --check index.js                   # syntax check
 ```
 
+Three gates must exit 0 before a release:
+
+```
+python server/qvasp_mcp.py --argcheck      # every tool answers {} without a traceback
+python tools/preflight_fixtures.py         # 19 input-lint rules
+python tools/tool_smoke.py                 # all 18 tools with no qvasp and no scheduler
+```
+
+The third one is the one that matters on a fresh machine: it points `QVASP_BIN` at a name
+that does not exist and fails if a tool raises instead of saying what to install.
+
 The server is dependency-free Python ≥ 3.8 (stdlib only) and speaks newline-delimited
 JSON-RPC 2.0 over stdio (`initialize`, `tools/list`, `tools/call`, `ping`).
 
